@@ -1,0 +1,634 @@
+<!-- TJP End of Day Checklist - working demo
+     Single file, no build step. Vanilla JS so it's easy to take into Claude Code.
+     DEMO PERSISTENCE: uses the artifact storage API (window.storage) so submissions
+     save and the Supervisor view works. In the deployed version you swap the two
+     functions marked >>> BACKEND SWAP POINT <<< for calls to your host. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --paper:#ECEAE3; --card:#FFFFFF;
+    --ink:#1C1F22; --ink-soft:#5C616A; --ink-faint:#8A8F97;
+    --line:#DCD8CE; --line-soft:#ECE9E1;
+    --green:#1C7A4B; --green-soft:#E7F1EB; --green-line:#BFE0CC;
+    --amber:#B86C12; --amber-soft:#FAEEDB; --amber-line:#EBCB97;
+    --band:#22282E; --radius:11px; --tap:48px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:480px;margin:0 auto;padding:0 0 130px}
+  .wrap.super{max-width:760px}
+
+  /* docket header */
+  .band{background:var(--band);color:#fff;padding:18px 20px 16px}
+  .band-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .mark{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;letter-spacing:.04em;line-height:1;text-transform:uppercase}
+  .mark small{display:block;font-size:11px;font-weight:600;letter-spacing:.22em;color:#A9B0B8;margin-top:5px}
+  .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;text-align:right;line-height:1.6;white-space:nowrap}
+  .docket b{color:#fff;font-weight:500}
+
+  .toggle{display:flex;background:#2E353C;border-radius:9px;padding:3px;margin-top:16px}
+  .toggle button{flex:1;appearance:none;border:0;cursor:pointer;background:transparent;color:#AEB4BC;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.08em;text-transform:uppercase;padding:9px 6px;border-radius:7px}
+  .toggle button.on{background:var(--paper);color:var(--ink)}
+
+  .coverage{padding:0 20px;background:var(--band)}
+  .coverage-inner{background:#3A424A;height:7px;border-radius:5px;overflow:hidden;transform:translateY(11px)}
+  .coverage-fill{height:100%;width:0;background:linear-gradient(90deg,var(--green) 0%,#2FA268 92%,rgba(47,162,104,.35) 100%);border-radius:5px;transition:width .35s ease}
+
+  .pad{padding:24px 16px 0}
+  .sect{margin-bottom:22px}
+  .eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 9px 2px;display:flex;align-items:center;gap:8px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .field{margin-bottom:12px}
+  label.lab{display:block;font-size:13.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px 2px}
+  input[type=text],input[type=time],input[type=number],textarea,select{width:100%;font-family:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:13px;outline:none}
+  textarea{min-height:70px;resize:vertical;line-height:1.4}
+  input:focus,textarea:focus,select:focus{border-color:var(--band);box-shadow:0 0 0 3px rgba(34,40,46,.12)}
+  .two{display:flex;gap:10px}.two>div{flex:1}
+  .hours{font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink-soft);margin:7px 2px 0}
+  .hint{font-size:12.5px;color:var(--amber);margin:7px 2px 0}
+
+  /* worker picker by role */
+  .who-role{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin:13px 2px 7px}
+  .who-role:first-child{margin-top:0}
+  .who{display:flex;flex-wrap:wrap;gap:8px}
+  .who button{appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:10px 16px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink)}
+  .who button.on{background:var(--band);border-color:var(--band);color:#fff}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:11px 13px;min-height:var(--tap);font-family:inherit;font-size:14.5px;font-weight:500;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .chip .box{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--line);flex:none;display:grid;place-items:center}
+  .chip.on{background:var(--green-soft);border-color:var(--green-line);color:#13502F}
+  .chip.on .box{background:var(--green);border-color:var(--green)}
+  .chip.on .box::after{content:"";width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+
+  .tick{width:100%;appearance:none;cursor:pointer;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:13px 14px;min-height:var(--tap);display:flex;align-items:center;gap:13px;margin-bottom:9px;font-family:inherit;font-size:15.5px;font-weight:500;color:var(--ink)}
+  .tick .box{width:23px;height:23px;border-radius:6px;border:1.8px solid var(--line);flex:none;display:grid;place-items:center}
+  .tick.on{background:var(--green-soft);border-color:var(--green-line)}
+  .tick.on .box{background:var(--green);border-color:var(--green)}
+  .tick.on .box::after{content:"";width:6px;height:11px;border:2.4px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .tick.primary{font-size:18px;font-weight:700;padding:17px 16px;min-height:60px;border-width:2px}
+  .tick.primary .box{width:27px;height:27px;border-radius:7px}
+  .tick.primary .box::after{width:7px;height:13px}
+
+  /* flag rows */
+  .flag{background:var(--card);border:1.5px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
+  .flag-head{width:100%;appearance:none;cursor:pointer;text-align:left;background:transparent;border:0;padding:14px;display:flex;align-items:flex-start;gap:12px;font-family:inherit;color:var(--ink)}
+  .flag-q{flex:1}
+  .flag-q b{display:block;font-size:15.5px;font-weight:600;line-height:1.3}
+  .flag-q span{display:block;font-size:13px;color:var(--ink-faint);margin-top:3px}
+  .yn{display:flex;gap:6px;flex:none}
+  .yn i{font-style:normal;font-size:13.5px;font-weight:700;letter-spacing:.04em;padding:6px 12px;border-radius:7px;border:1.5px solid var(--line);color:var(--ink-faint)}
+  .flag.on{border-color:var(--amber-line);background:var(--amber-soft)}
+  .flag.on .yn i.y{background:var(--amber);border-color:var(--amber);color:#fff}
+  .flag.off .yn i.n{background:#EBE8E0;border-color:var(--line);color:var(--ink-soft)}
+  .flag-body{display:none;padding:0 14px 14px}
+  .flag.on .flag-body{display:block}
+  .flag-body textarea{border-color:var(--amber-line)}
+
+  .hoursfield{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+  .hoursfield label{font-size:13.5px;font-weight:700;color:#7A4A12;flex:1}
+  .hoursfield .inp{position:relative;width:118px;flex:none}
+  .hoursfield input{width:118px;border-color:var(--amber-line);padding-right:44px;font-family:'IBM Plex Mono',monospace}
+  .hoursfield .suf{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--ink-faint);pointer-events:none}
+
+  .callout{display:flex;gap:9px;align-items:flex-start;background:#EAF2EC;border:1.5px solid var(--green-line);border-radius:9px;padding:11px 12px;margin:0 0 11px;font-size:13.5px;color:#13502F;line-height:1.4}
+  .callout.late{background:#F3EFE7;border-color:var(--line);color:var(--ink-soft)}
+  .callout .clk{font-size:15px;line-height:1.2}
+  .callout b{font-weight:700}
+
+  .notes-sect textarea{min-height:90px}
+
+  .bar{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--paper) 72%,rgba(236,234,227,0));padding:14px 16px calc(16px + env(safe-area-inset-bottom))}
+  .bar-inner{max-width:480px;margin:0 auto}
+  .send{width:100%;appearance:none;border:0;cursor:pointer;background:var(--green);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;letter-spacing:.05em;text-transform:uppercase;padding:16px;border-radius:12px;min-height:56px;box-shadow:0 6px 18px rgba(28,122,75,.28)}
+  .send:disabled{background:#B9C2BB;box-shadow:none;cursor:not-allowed}
+  .send-note{text-align:center;font-size:12.5px;color:var(--ink-faint);margin-top:9px}
+
+  .receipt{padding:46px 22px;text-align:center}
+  .receipt .ok{width:74px;height:74px;border-radius:50%;background:var(--green-soft);border:2px solid var(--green-line);margin:0 auto 22px;display:grid;place-items:center}
+  .receipt .ok::after{content:"";width:18px;height:34px;border:5px solid var(--green);border-top:0;border-left:0;transform:rotate(40deg) translateY(-3px)}
+  .receipt h2{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;letter-spacing:.02em;margin:0 0 8px;text-transform:uppercase}
+  .receipt p{color:var(--ink-soft);margin:0 0 4px}
+  .receipt .ref{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-faint);margin-top:14px}
+  .receipt button{margin-top:28px;appearance:none;border:1.5px solid var(--line);cursor:pointer;background:var(--card);color:var(--ink);font-family:inherit;font-size:15px;font-weight:600;padding:13px 22px;border-radius:10px}
+
+  /* supervisor */
+  .sup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 16px 6px}
+  .sup-head .ttl{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+  .sup-date{display:flex;align-items:center;gap:6px}
+  .sup-date button{appearance:none;border:1.5px solid var(--line);background:var(--card);cursor:pointer;width:36px;height:36px;border-radius:9px;font-size:18px;color:var(--ink);line-height:1}
+  .sup-date b{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:600;letter-spacing:.02em;min-width:140px;text-align:center}
+  .tally{display:flex;gap:8px;padding:6px 16px 4px}
+  .tally div{flex:1;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px}
+  .tally .n{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;line-height:1}
+  .tally .l{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint);margin-top:4px}
+  .tally .done .n{color:var(--green)}
+  .tally .flagd .n{color:var(--amber)}
+
+  .extras-banner{margin:8px 16px 2px;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:11px;padding:13px 15px;display:flex;align-items:center;gap:13px}
+  .extras-banner .big{font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:700;color:var(--amber);line-height:1;white-space:nowrap}
+  .extras-banner .txt{font-size:13.5px;color:#7A4A12;line-height:1.35}
+  .extras-banner .txt b{font-weight:700}
+
+  .sublist{padding:10px 16px 60px}
+  .crewcard{background:var(--card);border:1.5px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+  .crewcard.pending{border-style:dashed;opacity:.85}
+  .cc-head{display:flex;align-items:center;gap:11px;padding:13px 14px;cursor:pointer}
+  .cc-head.flat{cursor:default}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none;background:#CFCBC1}
+  .dot.in{background:var(--green)}
+  .cc-name{flex:1;font-weight:600;font-size:16px}
+  .cc-name small{display:block;font-weight:500;font-size:12px;color:var(--ink-faint);margin-top:1px}
+  .cc-tags{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.03em;padding:4px 8px;border-radius:6px;text-transform:uppercase}
+  .tag.amber{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-line)}
+  .tag.extra{background:var(--amber);color:#fff}
+  .tag.grey{background:#EEEBE3;color:var(--ink-faint)}
+  .tag.time{font-family:'IBM Plex Mono',monospace;background:#EEF1F3;color:var(--ink-soft);letter-spacing:0;text-transform:none}
+  .cc-body{display:none;border-top:1px solid var(--line-soft);padding:4px 14px 14px}
+  .crewcard.open .cc-body{display:block}
+  .row{padding:11px 0;border-bottom:1px solid var(--line-soft)}
+  .row:last-child{border-bottom:0}
+  .row .k{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:3px;display:flex;align-items:center;gap:7px}
+  .row .k .pip{width:7px;height:7px;border-radius:50%;background:var(--amber)}
+  .row .v{font-size:14.5px;color:var(--ink);line-height:1.45;white-space:pre-wrap}
+  .row.flagrow{background:var(--amber-soft);margin:0 -14px;padding:11px 14px;border-bottom:1px solid #F2E6CF}
+  .row.flagrow .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .row.flagrow .cost{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--amber);white-space:nowrap}
+  .pd{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .pd span{font-size:13px;color:var(--ink-soft);background:#F1EEE6;border-radius:6px;padding:4px 9px}
+  .pd span.miss{color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-line);font-weight:600}
+  .empty{text-align:center;color:var(--ink-faint);padding:34px 20px;font-size:14.5px}
+  .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app"></div>
+
+<script>
+/* ====================== CONFIG (edit these) ====================== */
+// >>> PASTE YOUR APPS SCRIPT URL HERE <<<
+// After you deploy the Apps Script (Phase 2), paste its /exec Web app URL
+// between the quotes below. This one line is the only thing that needs to
+// change to go from demo to live. Leave it as-is and the app stays in demo
+// mode (saves to local artifact storage instead of your sheet).
+const API_URL = "https://script.google.com/macros/s/AKfycbzCBqpaFgreVPJnTmdeyiHSlTH2j3QRDDoulHj5HwNCFgS_hsTYMsAaGQ8biiW9xAp2tQ/exec";
+
+// Your crew. Edit names/roles here, this is the only place they live.
+const CREW = [
+  {name:"Brydon",  role:"Supervisor", note:""},
+  {name:"Michael", role:"Supervisor", note:"2ic"},
+  {name:"Tyler",   role:"Tradesman"},
+  {name:"Zac",     role:"Tradesman"},
+  {name:"John",    role:"Tradesman"},
+  {name:"Steve",   role:"Tradesman"},
+  {name:"Antonio", role:"Apprentice"},
+  {name:"Jaydon",  role:"Apprentice"},
+];
+const ROLE_ORDER = ["Supervisor","Tradesman","Apprentice"];
+const ORDER_CUTOFF_MIN = 15*60 + 30; // 3:30pm
+
+// Your current jobs (the dropdown). Seeded with recent jobs as placeholders, swap
+// for your live list. In the deployed version this loads from the master sheet's
+// "Jobs" tab so you maintain it in one place and Cowork matches folders to these names.
+// Fallback list (used only if the sheet's Jobs tab can't be reached). On load
+// the app fetches the live job names from the Apps Script and replaces this.
+let JOBS = [
+  "27 Hill St (Madden Builders)",
+  "93 Hillcrest Rd, Tolmans Hill (Margot Jones)",
+  "Fort St (Southern Building)",
+  "Deck reseal (Rob)",
+];
+
+const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
+
+const FLAGS = [
+  {key:"makegood", extra:true,    q:"Make-good or repairs outside the original scope?", sub:"Fixing damage or patching beyond the quote. What and where?"},
+  {key:"variation", extra:true,   q:"Extra work or changes asked for on site?",        sub:"Who asked (builder/client) and what they wanted."},
+  {key:"holdup",                  q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable."},
+  {key:"materials", delivery:true,q:"Checked paint & stock levels, anything low?",     sub:"Paint, tints, consumables. Custom tints especially, they're slow."},
+];
+
+const CLEAN = [
+  {key:"neverhere", t:"Does it look like we were never here?", primary:true},
+  {key:"rubbish",   t:"Rubbish & waste removed"},
+  {key:"food",      t:"All our food scraps & rubbish cleared"},
+  {key:"masking",   t:"Masking, drop sheets & tape pulled up"},
+  {key:"wiped",     t:"Floors & surfaces wiped, no drips or overspray"},
+];
+const GEAR = [
+  {key:"spray",  t:"Spray gear flushed & cleaned"},
+  {key:"secure", t:"Tools & gear secured / locked up"},
+  {key:"tidy",   t:"All gear stacked in a tidy line, neat for next day"},
+];
+const PACK_ALL = [...CLEAN,...GEAR];
+
+/* ====================== STORAGE LAYER ====================== */
+// >>> BACKEND SWAP POINT <<<  (Phase 2 — now wired to the Google Sheet)
+// saveSubmission POSTs a flat record to the Apps Script, which appends it as
+// one row in the Log tab. loadDay GETs a day's rows and rebuilds the nested
+// shape the Supervisor view expects. Set API_URL above to go live; if it's
+// still the placeholder, we fall back to local demo storage so nothing breaks.
+function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}
+function liveBackend(){return /^https?:\/\//.test(API_URL) && !API_URL.includes("PASTE_YOUR");}
+
+// nested record (in-app) -> flat object whose keys match the Log headers
+function flattenRec(rec){
+  const fl=rec.flags;
+  return {
+    date:rec.date, time:rec.time, docket:rec.docket,
+    worker:rec.worker, role:rec.role, job:rec.job, jobListed:rec.jobListed,
+    tasks:rec.workDone, prep:(rec.prep||[]).join(", "), photos:rec.photos,
+    makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note,
+    variation_hrs:fl.variation.hours, variation_note:fl.variation.note,
+    holdup_note:fl.holdup.note, materials_note:fl.materials.note,
+    clean_neverhere:rec.pack.neverhere, clean_rubbish:rec.pack.rubbish,
+    clean_food:rec.pack.food, clean_masking:rec.pack.masking, clean_wiped:rec.pack.wiped,
+    gear_spray:rec.pack.spray, gear_secure:rec.pack.secure, gear_tidy:rec.pack.tidy,
+    notes:rec.notes
+  };
+}
+// flat row from the sheet -> nested record the Supervisor view reads
+function rehydrateRow(r){
+  const b=v=>v===true||v==="TRUE"||v==="true"||v===1||v==="1";
+  const t=v=>v==null?"":String(v).trim();
+  const n=v=>{const x=parseFloat(v);return isNaN(x)?0:x;};
+  return {
+    date:t(r.date), time:t(r.time), docket:t(r.docket), ts:0,
+    worker:t(r.worker), role:t(r.role), job:t(r.job), jobListed:b(r.jobListed),
+    workDone:t(r.tasks),
+    prep:t(r.prep)?t(r.prep).split(/,\s*/).filter(Boolean):[],
+    photos:b(r.photos),
+    flags:{
+      makegood:{on:!!t(r.makegood_note)||n(r.makegood_hrs)>0, note:t(r.makegood_note), hours:n(r.makegood_hrs)},
+      variation:{on:!!t(r.variation_note)||n(r.variation_hrs)>0, note:t(r.variation_note), hours:n(r.variation_hrs)},
+      holdup:{on:!!t(r.holdup_note), note:t(r.holdup_note), hours:0},
+      materials:{on:!!t(r.materials_note), note:t(r.materials_note), hours:0}
+    },
+    pack:{
+      neverhere:b(r.clean_neverhere), rubbish:b(r.clean_rubbish), food:b(r.clean_food),
+      masking:b(r.clean_masking), wiped:b(r.clean_wiped),
+      spray:b(r.gear_spray), secure:b(r.gear_secure), tidy:b(r.gear_tidy)
+    },
+    notes:t(r.notes)
+  };
+}
+
+async function saveSubmission(rec){
+  if(liveBackend()){
+    // text/plain dodges the CORS preflight Apps Script can't answer
+    await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(flattenRec(rec))});
+    return;
+  }
+  const key="eod:"+rec.date+":"+slug(rec.worker);
+  await window.storage.set(key, JSON.stringify(rec), true);
+}
+async function loadDay(dateStr){
+  if(liveBackend()){
+    try{
+      const res=await fetch(API_URL+"?date="+encodeURIComponent(dateStr));
+      const rows=await res.json();
+      return Array.isArray(rows)?rows.map(rehydrateRow):[];
+    }catch(e){return [];}
+  }
+  const out=[];
+  try{
+    const res=await window.storage.list("eod:"+dateStr+":",true);
+    const keys=(res&&res.keys)||[];
+    for(const k of keys){ try{const g=await window.storage.get(k,true); if(g&&g.value)out.push(JSON.parse(g.value));}catch(e){} }
+  }catch(e){}
+  return out;
+}
+
+/* ====================== HELPERS ====================== */
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+function prettyDate(iso){return new Date(iso+"T00:00:00").toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});}
+function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
+function nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes();}
+function initials(name){const p=name.trim().split(/\s+/);return p.length>1?p.map(w=>w[0]).join("").slice(0,3).toUpperCase():name.slice(0,3).toUpperCase();}
+function diffHours(a,b){if(!a||!b)return null;const[ah,am]=a.split(":").map(Number),[bh,bm]=b.split(":").map(Number);let m=(bh*60+bm)-(ah*60+am);if(m<0)m+=1440;return m/60;}
+function roleOf(name){const c=CREW.find(c=>c.name===name);return c?c.role:"Tradesman";}
+function num(x){const n=parseFloat(x);return isNaN(n)?0:n;}
+function jobOK(){return f.job&&f.job!==""&&(f.job!=="__other__"||f.jobOther.trim());}
+function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
+
+/* ====================== STATE ====================== */
+let view="crew", supDate=todayISO(), f=blankForm();
+function blankForm(){
+  return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
+    flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
+    pack:{neverhere:false,rubbish:false,food:false,masking:false,wiped:false,spray:false,secure:false,tidy:false},
+    notes:""};
+}
+
+/* ====================== RENDER ====================== */
+function render(){
+  const app=$("#app"); app.innerHTML="";
+  app.appendChild(header());
+  if(view==="crew"){app.appendChild(coverage());app.appendChild(crewForm());app.appendChild(submitBar());}
+  else renderSupervisor(app);
+}
+
+function header(){
+  const wrap=el("div","wrap"+(view==="super"?" super":""));
+  const band=el("div","band");
+  const top=el("div","band-top");
+  top.appendChild(el("div","mark","TJP<small>End of day</small>"));
+  const dk=el("div","docket");
+  dk.innerHTML = view==="crew"
+    ? "<b>EOD-"+todayISO().replace(/-/g,"")+(f.worker?("-"+initials(f.worker)):"")+"</b><br>"+prettyDate(todayISO())
+    : "<b>SUPERVISOR</b><br>"+prettyDate(supDate);
+  top.appendChild(dk); band.appendChild(top);
+  const tg=el("div","toggle");
+  const b1=el("button",view==="crew"?"on":"","Crew checklist");
+  const b2=el("button",view==="super"?"on":"","Supervisor");
+  b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();};
+  tg.appendChild(b1);tg.appendChild(b2); band.appendChild(tg);
+  wrap.appendChild(band); return wrap;
+}
+
+function coverage(){const c=el("div","coverage");const inner=el("div","coverage-inner");const fill=el("div","coverage-fill");fill.style.width=progress()+"%";inner.appendChild(fill);c.appendChild(inner);return c;}
+function progress(){
+  let total=0,done=0;
+  total++;if(f.worker)done++;
+  total++;if(jobOK())done++;
+  total++;if(f.workDone.trim())done++;
+  total++;if(Object.values(f.prep).some(Boolean))done++;
+  FLAGS.forEach(fl=>{total++;const s=f.flags[fl.key];const ok=!s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));if(ok)done++;});
+  PACK_ALL.forEach(p=>{total++;if(f.pack[p.key])done++;});
+  return Math.round(done/total*100);
+}
+
+function crewForm(){
+  const wrap=el("div","wrap"); const pad=el("div","pad");
+
+  // On site
+  let s=sect("On site");
+  let fld=el("div","field"); fld.appendChild(lab("Tap your name"));
+  ROLE_ORDER.forEach(role=>{
+    const members=CREW.filter(c=>c.role===role); if(!members.length)return;
+    fld.appendChild(el("div","who-role",role==="Supervisor"?"Supervisors":role==="Tradesman"?"Tradesmen":"Apprentices"));
+    const who=el("div","who");
+    members.forEach(c=>{
+      const b=el("button",f.worker===c.name?"on":"",c.name+(c.note?(" · "+c.note):""));
+      b.onclick=()=>{f.worker=(f.worker===c.name?null:c.name);render();};
+      who.appendChild(b);
+    });
+    fld.appendChild(who);
+  });
+  s.appendChild(fld);
+
+  fld=el("div","field"); fld.appendChild(lab("Which job?"));
+  const sel=el("select");
+  sel.appendChild(new Option("Pick a job...",""));
+  JOBS.forEach(j=>{const o=new Option(j,j);if(f.job===j)o.selected=true;sel.appendChild(o);});
+  const oo=new Option("Other / not listed","__other__");if(f.job==="__other__")oo.selected=true;sel.appendChild(oo);
+  sel.onchange=e=>{f.job=e.target.value;render();};
+  fld.appendChild(sel);
+  if(f.job==="__other__"){
+    const ji=el("input");ji.type="text";ji.value=f.jobOther;ji.placeholder="Type the job (site or builder)";ji.style.marginTop="9px";
+    ji.oninput=e=>{f.jobOther=e.target.value;updateProgress();updateSend();};
+    fld.appendChild(ji);
+    fld.appendChild(el("div","hint","Not on the list, so Taylor will sort which folder this belongs to."));
+  }
+  s.appendChild(fld);
+
+  pad.appendChild(s);
+
+  // Today's work
+  s=sect("Today's work");
+  fld=el("div","field");fld.appendChild(lab("What tasks did you work on today?"));
+  const wd=el("textarea");wd.value=f.workDone;wd.placeholder="Short version, e.g. 2nd coat to north + east walls, started window frames";
+  wd.oninput=e=>{f.workDone=e.target.value;updateProgress();};fld.appendChild(wd);s.appendChild(fld);
+  fld=el("div","field");fld.appendChild(lab("Prep stages done"));
+  const chips=el("div","chips");
+  PREP.forEach(p=>{const c=el("button","chip"+(f.prep[p]?" on":""),"<span class='box'></span>"+p);c.onclick=()=>{f.prep[p]=!f.prep[p];render();};chips.appendChild(c);});
+  fld.appendChild(chips);s.appendChild(fld);
+  const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work");
+  ph.onclick=()=>{f.photos=!f.photos;render();};s.appendChild(ph);
+  pad.appendChild(s);
+
+  // Flag to Taylor
+  s=sect("Flag to Taylor");
+  FLAGS.forEach(fl=>{
+    const state=f.flags[fl.key];
+    const box=el("div","flag "+(state.on?"on":"off"));
+    const head=el("button","flag-head");
+    head.innerHTML="<span class='flag-q'><b>"+fl.q+"</b><span>"+fl.sub+"</span></span><span class='yn'><i class='n'>No</i><i class='y'>Yes</i></span>";
+    head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";}render();
+      if(state.on)setTimeout(()=>{const t=document.querySelector('[data-focus="'+fl.key+'"]');if(t)t.focus();},40);};
+    box.appendChild(head);
+    const body=el("div","flag-body");
+    if(fl.delivery){
+      const before=nowMin()<ORDER_CUTOFF_MIN;
+      const co=el("div","callout"+(before?"":" late"));
+      co.innerHTML="<span class='clk'>"+(before?"🕒":"📦")+"</span><span>"+(before
+        ?"Get the order in <b>before 3:30</b> and it'll be delivered. You've still got time."
+        :"It's <b>past 3:30</b> now, so flag it here and it'll go on the next order.")+"</span>";
+      body.appendChild(co);
+    }
+    if(fl.extra){
+      const hf=el("div","hoursfield");
+      hf.appendChild(el("label",null,"Hours on this extra"));
+      const inp=el("div","inp");
+      const h=el("input");h.type="number";h.min="0";h.step="0.25";h.inputMode="decimal";h.value=state.hours;h.placeholder="0";h.setAttribute("data-focus",fl.key);
+      h.oninput=e=>{state.hours=e.target.value;updateProgress();updateSend();};
+      inp.appendChild(h);inp.appendChild(el("span","suf","hrs"));hf.appendChild(inp);
+      body.appendChild(hf);
+    }
+    const ta=el("textarea");ta.value=state.note;ta.placeholder="Quick note for Taylor...";if(!fl.extra)ta.setAttribute("data-focus",fl.key);
+    ta.oninput=e=>{state.note=e.target.value;updateProgress();updateSend();};
+    body.appendChild(ta);box.appendChild(body);
+    s.appendChild(box);
+  });
+  pad.appendChild(s);
+
+  // Leave it clean (emphasised)
+  s=sect("Leave it clean");
+  CLEAN.forEach(p=>{
+    const t=el("button","tick"+(p.primary?" primary":"")+(f.pack[p.key]?" on":""),"<span class='box'></span>"+p.t);
+    t.onclick=()=>{f.pack[p.key]=!f.pack[p.key];render();};s.appendChild(t);
+  });
+  pad.appendChild(s);
+
+  // Pack down
+  s=sect("Gear");
+  GEAR.forEach(p=>{
+    const t=el("button","tick"+(f.pack[p.key]?" on":""),"<span class='box'></span>"+p.t);
+    t.onclick=()=>{f.pack[p.key]=!f.pack[p.key];render();};s.appendChild(t);
+  });
+  pad.appendChild(s);
+
+  // Notes
+  s=sect("Anything else");s.className="sect notes-sect";
+  fld=el("div","field");fld.appendChild(lab("Notes for Taylor (anything that doesn't fit above)"));
+  const nt=el("textarea");nt.value=f.notes;nt.placeholder="Optional";nt.oninput=e=>{f.notes=e.target.value;};fld.appendChild(nt);s.appendChild(fld);
+  pad.appendChild(s);
+
+  wrap.appendChild(pad);return wrap;
+}
+
+function sect(title){const s=el("div","sect");s.appendChild(el("p","eyebrow",title));return s;}
+function lab(t){return el("label","lab",t);}
+function updateProgress(){const fill=$(".coverage-fill");if(fill)fill.style.width=progress()+"%";}
+function updateSend(){const b=$(".send");if(b)b.disabled=!canSend();}
+function canSend(){return f.worker&&jobOK()&&FLAGS.every(fl=>{const s=f.flags[fl.key];return !s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));});}
+
+function submitBar(){
+  const bar=el("div","bar");const inner=el("div","bar-inner");
+  const b=el("button","send","Sign off & send to Taylor");b.disabled=!canSend();b.onclick=doSubmit;
+  inner.appendChild(b);
+  let missing="Goes straight to Taylor with a timestamp";
+  if(!f.worker)missing="Tap your name to start";
+  else if(!jobOK())missing="Pick which job you were on";
+  else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.extra&&!(num(s.hours)>0);}))missing="Add the hours on your flagged extras";
+  else if(FLAGS.some(fl=>f.flags[fl.key].on&&!f.flags[fl.key].note.trim()))missing="Add a note to your flagged items";
+  inner.appendChild(el("div","send-note",missing));
+  bar.appendChild(inner);return bar;
+}
+
+async function doSubmit(){
+  if(!canSend())return;
+  const b=$(".send");b.disabled=true;b.textContent="Sending...";
+  const rec={date:todayISO(),ts:Date.now(),time:nowTime(),
+    docket:"EOD-"+todayISO().replace(/-/g,"")+"-"+initials(f.worker),
+    worker:f.worker,role:roleOf(f.worker),job:effectiveJob(),jobListed:f.job!=="__other__",
+    workDone:f.workDone.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
+    flags:{},pack:{...f.pack},notes:f.notes.trim()};
+  FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0};});
+  try{await saveSubmission(rec);}catch(e){}
+  showReceipt(rec);
+}
+
+function extraHoursOf(rec){return num(rec.flags.makegood.hours)+num(rec.flags.variation.hours);}
+
+function showReceipt(rec){
+  const app=$("#app");app.innerHTML="";app.appendChild(header());
+  const wrap=el("div","wrap");const r=el("div","receipt");
+  r.appendChild(el("div","ok"));r.appendChild(el("h2","Day signed off"));
+  r.appendChild(el("p","Sent to Taylor at "+rec.time+"."));
+  const flagged=Object.values(rec.flags).filter(x=>x.on).length;
+  const xh=extraHoursOf(rec);
+  let line=flagged?(flagged+" item"+(flagged>1?"s":"")+" flagged for him to look at."):"Nothing flagged. All routine.";
+  if(xh>0)line+=" "+(xh%1?xh:xh)+" hrs of extras logged.";
+  r.appendChild(el("p",line));
+  r.appendChild(el("div","ref",rec.docket));
+  const again=el("button",null,"Done");again.onclick=()=>{f=blankForm();view="crew";render();};
+  r.appendChild(again);wrap.appendChild(r);app.appendChild(wrap);
+}
+
+/* ====================== SUPERVISOR ====================== */
+async function renderSupervisor(app){
+  const wrap=el("div","wrap super");
+  const head=el("div","sup-head");
+  head.appendChild(el("div","ttl","Today on site"));
+  const dn=el("div","sup-date");
+  const prev=el("button",null,"‹");prev.onclick=()=>{supDate=shiftDate(supDate,-1);render();};
+  const lbl=el("b",null,supDate===todayISO()?"Today":prettyDate(supDate));
+  const next=el("button",null,"›");next.onclick=()=>{if(supDate<todayISO()){supDate=shiftDate(supDate,1);render();}};
+  if(supDate>=todayISO())next.style.opacity=".35";
+  dn.appendChild(prev);dn.appendChild(lbl);dn.appendChild(next);head.appendChild(dn);
+  wrap.appendChild(head);
+  const tally=el("div","tally");tally.id="tally";wrap.appendChild(tally);
+  const ban=el("div");ban.id="banner";wrap.appendChild(ban);
+  const list=el("div","sublist");list.id="sublist";list.appendChild(el("div","empty","Loading the day..."));wrap.appendChild(list);
+  wrap.appendChild(el("div","demo-note","Demo build. Submissions save to this artifact so the supervisor view works. In the deployed version they land in your sheet or database, and the daily text goes out automatically."));
+  app.appendChild(wrap);
+  const subs=await loadDay(supDate);
+  paintSupervisor(subs);
+}
+function shiftDate(iso,n){const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+
+function paintSupervisor(subs){
+  const byWorker={};subs.forEach(s=>byWorker[s.worker]=s);
+  const inCount=Object.keys(byWorker).length;
+  const flagCount=subs.filter(s=>Object.values(s.flags).some(x=>x.on)).length;
+  let xHrs=0;
+  subs.forEach(s=>{xHrs+=extraHoursOf(s);});
+
+  const tally=$("#tally");tally.innerHTML="";
+  tally.appendChild(tile("done",inCount+"/"+CREW.length,"Signed off"));
+  tally.appendChild(tile("",Math.max(CREW.length-inCount,0),"Outstanding"));
+  tally.appendChild(tile("flagd",flagCount,"With flags"));
+
+  const ban=$("#banner");ban.innerHTML="";
+  if(xHrs>0){
+    const b=el("div","extras-banner");
+    b.appendChild(el("div","big",(xHrs%1?xHrs.toFixed(2).replace(/0$/,""):xHrs)+" hrs"));
+    b.appendChild(el("div","txt","<b>Extras logged today.</b> Make-good and variation hours to get on the variation before they're absorbed."));
+    ban.appendChild(b);
+  }
+
+  const list=$("#sublist");list.innerHTML="";
+  const submitted=CREW.map(c=>c.name).filter(n=>byWorker[n]);
+  const pending=CREW.map(c=>c.name).filter(n=>!byWorker[n]);
+  submitted.sort((a,b)=>{const fa=Object.values(byWorker[a].flags).some(x=>x.on)?0:1;const fb=Object.values(byWorker[b].flags).some(x=>x.on)?0:1;return fa-fb||byWorker[a].ts-byWorker[b].ts;});
+  submitted.forEach(n=>list.appendChild(crewCard(byWorker[n])));
+  pending.forEach(n=>list.appendChild(pendingCard(n)));
+}
+function tile(cls,n,l){const d=el("div",cls);d.appendChild(el("div","n",String(n)));d.appendChild(el("div","l",l));return d;}
+function pendingCard(name){
+  const c=el("div","crewcard pending");const h=el("div","cc-head flat");
+  h.appendChild(el("span","dot"));
+  h.appendChild(el("div","cc-name",name+"<small>"+roleOf(name)+" · not signed off yet</small>"));
+  const tags=el("div","cc-tags");tags.appendChild(el("span","tag grey","Waiting"));h.appendChild(tags);
+  c.appendChild(h);return c;
+}
+function crewCard(s){
+  const flags=Object.entries(s.flags).filter(([k,v])=>v.on);
+  const xh=extraHoursOf(s);
+  const c=el("div","crewcard");const h=el("div","cc-head");
+  h.appendChild(el("span","dot in"));
+  h.appendChild(el("div","cc-name",s.worker+"<small>"+(s.role||"")+" · "+s.job+"</small>"));
+  const tags=el("div","cc-tags");
+  if(xh>0)tags.appendChild(el("span","tag extra",(xh%1?xh:xh)+"h extra"));
+  if(flags.length)tags.appendChild(el("span","tag amber",flags.length+" flag"+(flags.length>1?"s":"")));
+  h.appendChild(tags);c.appendChild(h);
+
+  const body=el("div","cc-body");
+  const FL={makegood:"Make-good (out of scope)",variation:"Extra work / variation",holdup:"Hold-up",materials:"Running low"};
+  flags.forEach(([k,v])=>{
+    const r=el("div","row flagrow");
+    const hd=el("div","hd");
+    hd.appendChild(el("div","k","<span class='pip'></span>"+FL[k]));
+    if((k==="makegood"||k==="variation")&&num(v.hours)>0){
+      hd.appendChild(el("div","cost",v.hours+"h"));
+    }
+    r.appendChild(hd);
+    r.appendChild(el("div","v",v.note||"(flagged, no note)"));
+    body.appendChild(r);
+  });
+  if(s.workDone){const r=el("div","row");r.appendChild(el("div","k","Tasks worked on"));r.appendChild(el("div","v",s.workDone));body.appendChild(r);}
+  if(s.prep&&s.prep.length){const r=el("div","row");r.appendChild(el("div","k","Prep"));const pd=el("div","pd");s.prep.forEach(p=>pd.appendChild(el("span",null,p)));r.appendChild(pd);body.appendChild(r);}
+  const r=el("div","row");r.appendChild(el("div","k","Clean-up & gear"));const pd=el("div","pd");
+  PACK_ALL.forEach(p=>{const done=s.pack[p.key];const label=p.key==="neverhere"?"Looked like we were never here":p.t;pd.appendChild(el("span",done?"":"miss",(done?"✓ ":"✗ ")+label));});
+  r.appendChild(pd);body.appendChild(r);
+  const meta=el("div","row");meta.appendChild(el("div","k","Submitted"));meta.appendChild(el("div","v",s.time+(s.photos?"  ·  photos taken":"")+"  ·  "+s.docket));body.appendChild(meta);
+  if(s.notes){const rn=el("div","row");rn.appendChild(el("div","k","Notes"));rn.appendChild(el("div","v",s.notes));body.appendChild(rn);}
+  c.appendChild(body);
+  h.onclick=()=>c.classList.toggle("open");
+  return c;
+}
+
+/* ====================== GO ====================== */
+// Pull the live job list from the sheet's Jobs tab (GET with no params returns
+// the Jobs column). Falls back to the hardcoded JOBS above if the fetch fails.
+async function loadJobs(){
+  if(!liveBackend())return;
+  try{
+    const res=await fetch(API_URL);
+    const arr=await res.json();
+    if(Array.isArray(arr)&&arr.length)JOBS=arr;
+  }catch(e){}
+}
+render();
+loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(); });
+</script>
