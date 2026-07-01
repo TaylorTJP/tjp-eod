@@ -95,6 +95,14 @@
   .chip.on{background:var(--green-soft);border-color:var(--green-line);color:#13502F}
   .chip.on .box{background:var(--green);border-color:var(--green)}
   .chip.on .box::after{content:"";width:4px;height:8px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .chip.rec{border-color:var(--green-line)}
+  .rectag{font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--green);margin-left:6px;text-transform:uppercase}
+  .reclegend{font-weight:600;font-size:11px;color:var(--green);text-transform:none;letter-spacing:0;margin-left:6px}
+  .area.off{opacity:.6;border-style:dashed}
+  .inc{appearance:none;border:0;background:transparent;cursor:pointer;padding:2px;flex:none}
+  .inc .box{width:23px;height:23px;border-radius:6px;border:1.8px solid var(--line);display:grid;place-items:center;background:#fff}
+  .inc.on .box{background:var(--green);border-color:var(--green)}
+  .inc.on .box::after{content:"";width:5px;height:10px;border:2.2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
   .roomnote{margin-top:12px}
 
   .addarea{width:100%;appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:11px;padding:14px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink-soft);margin-bottom:8px}
@@ -153,6 +161,7 @@ var DEFAULT_INTERIOR = [
   {name:"Skirting boards", finish:"Semi-gloss"}
 ];
 var DEFAULT_EXTERIOR = [
+  {name:"Roof",                  finish:"Satin"},
   {name:"Weatherboards / render", finish:"Low sheen"},
   {name:"Eaves & fascia",        finish:"Low sheen"},
   {name:"Gutters & downpipes",   finish:"Satin"},
@@ -199,7 +208,7 @@ var client={name:"",address:"",contact:""};
 var interiorAreas=[], exteriorAreas=[];
 var uid=1;
 
-function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,note:"",open:false};}); }
+function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,note:"",open:false};}); }
 function seed(){ interiorAreas=mk(DEFAULT_INTERIOR); exteriorAreas=mk(DEFAULT_EXTERIOR); }
 function curAreas(){ return tab==="Interior"?interiorAreas:exteriorAreas; }
 
@@ -221,7 +230,7 @@ function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMont
 function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
 function chosenColour(a){ if(a.other&&a.other.trim())return {name:a.other.trim(),code:"",hex:null,custom:true}; return a.colour; }
-function filledIn(list){ return list.filter(function(a){return chosenColour(a);}).length; }
+function filledIn(list){ return list.filter(function(a){return a.include && chosenColour(a);}).length; }
 function filledCount(){ return filledIn(interiorAreas)+filledIn(exteriorAreas); }
 function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0; }
 
@@ -254,7 +263,7 @@ function header(){
 function intro(){
   var wrap=el("div","wrap");
   var p=el("div","intro");
-  p.innerHTML="Enter your details, then pick colours for each area on the <b>Interior</b> and <b>Exterior</b> tabs. Fill in what you know — you can leave the rest. Hit send when you're done and it goes straight to Taylor.";
+  p.innerHTML="Enter your details, then work down the <b>Interior</b> and <b>Exterior</b> tabs. <b>Untick any areas we're not painting</b>, and pick a colour for the rest. The sheen marked in green is our recommendation. Hit send when you're done.";
   wrap.appendChild(p);
   return wrap;
 }
@@ -300,14 +309,23 @@ function textField(labelText, val, oninput, placeholder){
 }
 
 function areaCard(a){
-  var card=el("div","area");
+  var card=el("div","area"+(a.include?"":" off"));
   var head=el("div","area-head");
+
+  var inc=el("button","inc"+(a.include?" on":"")); inc.innerHTML="<span class='box'></span>";
+  inc.title=a.include?"We're painting this — untick to skip":"Ticked areas are included";
+  inc.onclick=function(){a.include=!a.include; if(!a.include)a.open=false; render();};
+  head.appendChild(inc);
+
   var nm=el("div","area-name");
   if(a.fixed){ nm.textContent=a.name; }
   else{ var ni=document.createElement("input"); ni.type="text"; ni.value=a.name; ni.placeholder="Area (e.g. Hallway)"; ni.oninput=function(e){a.name=e.target.value;}; nm.appendChild(ni); }
   head.appendChild(nm);
+
   var del=el("button","area-del"); del.innerHTML="&times;"; del.title="Remove"; del.onclick=function(){ interiorAreas=interiorAreas.filter(function(x){return x.id!==a.id;}); exteriorAreas=exteriorAreas.filter(function(x){return x.id!==a.id;}); render(); };
   head.appendChild(del); card.appendChild(head);
+
+  if(!a.include){ return card; }
 
   var body=el("div","area-body");
 
@@ -327,10 +345,17 @@ function areaCard(a){
 
   if(a.open) body.appendChild(swatchPanel(a));
 
-  // finish as chips (no dropdown)
-  var fw=el("div","finish"); fw.appendChild(lab("Finish / sheen"));
+  // finish as chips (no dropdown); recommended sheen marked in green
+  var fw=el("div","finish");
+  var fl=el("label","lab"); fl.innerHTML="Finish / sheen <span class='reclegend'>green = our recommendation</span>"; fw.appendChild(fl);
   var chips=el("div","chips");
-  FINISHES.forEach(function(fn){ var c=el("button","chip"+(a.finish===fn?" on":"")); c.innerHTML="<span class='box'></span>"+esc(fn); c.onclick=function(){a.finish=(a.finish===fn?"":fn);render();}; chips.appendChild(c); });
+  FINISHES.forEach(function(fn){
+    var isRec=(fn===a.recommended);
+    var c=el("button","chip"+(a.finish===fn?" on":"")+(isRec?" rec":""));
+    c.innerHTML="<span class='box'></span>"+esc(fn)+(isRec?"<span class='rectag'>Recommended</span>":"");
+    c.onclick=function(){a.finish=(a.finish===fn?"":fn);render();};
+    chips.appendChild(c);
+  });
   fw.appendChild(chips); body.appendChild(fw);
 
   var rn=el("div","roomnote"); rn.appendChild(lab("Note — optional (e.g. which rooms, feature wall)"));
@@ -378,7 +403,7 @@ function paintGrid(a,gw){
 }
 
 function addArea(){
-  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",note:"",open:false});
+  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,note:"",open:false});
   render();
   setTimeout(function(){var inps=document.querySelectorAll("#areas .area-name input"); if(inps.length)inps[inps.length-1].focus();},30);
 }
@@ -402,7 +427,7 @@ function submitBar(){
 }
 
 function collect(list, scope){
-  return list.filter(function(a){return chosenColour(a);}).map(function(a){ var c=chosenColour(a);
+  return list.filter(function(a){return a.include && chosenColour(a);}).map(function(a){ var c=chosenColour(a);
     return {scope:scope, area:a.name||"(unnamed)", colour:c.name, code:c.code||"", finish:a.finish||"", note:(a.note||"").trim(), custom:!!c.custom};
   });
 }
