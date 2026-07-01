@@ -103,6 +103,16 @@
   .inc .box{width:23px;height:23px;border-radius:6px;border:1.8px solid var(--line);display:grid;place-items:center;background:#fff}
   .inc.on .box{background:var(--green);border-color:var(--green)}
   .inc.on .box::after{content:"";width:5px;height:10px;border:2.2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .tickline{width:100%;appearance:none;cursor:pointer;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;min-height:var(--tap);display:flex;align-items:center;gap:11px;font-family:inherit;font-size:15px;font-weight:500;color:var(--ink);margin-bottom:10px}
+  .tickline .box{width:20px;height:20px;border-radius:6px;border:1.6px solid var(--line);flex:none;display:grid;place-items:center}
+  .tickline.on{background:var(--green-soft);border-color:var(--green-line);color:#13502F}
+  .tickline.on .box{background:var(--green);border-color:var(--green)}
+  .tickline.on .box::after{content:"";width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .ackbox{width:100%;appearance:none;cursor:pointer;text-align:left;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px;padding:12px;display:flex;align-items:flex-start;gap:11px;font-family:inherit;margin:0 0 12px;color:#7A4A12}
+  .ackbox .box{width:20px;height:20px;border-radius:6px;border:1.6px solid var(--amber-line);flex:none;display:grid;place-items:center;background:#fff;margin-top:1px}
+  .ackbox.on .box{background:var(--amber);border-color:var(--amber)}
+  .ackbox.on .box::after{content:"";width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .ack-t{font-size:13px;line-height:1.4;font-weight:500}
   .roomnote{margin-top:12px}
 
   .addarea{width:100%;appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:11px;padding:14px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink-soft);margin-bottom:8px}
@@ -208,7 +218,7 @@ var client={name:"",address:"",contact:""};
 var interiorAreas=[], exteriorAreas=[];
 var uid=1;
 
-function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,note:"",open:false};}); }
+function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,asExisting:false,ackMatch:false,note:"",open:false};}); }
 function seed(){ interiorAreas=mk(DEFAULT_INTERIOR); exteriorAreas=mk(DEFAULT_EXTERIOR); }
 function curAreas(){ return tab==="Interior"?interiorAreas:exteriorAreas; }
 
@@ -230,9 +240,11 @@ function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMont
 function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
 function chosenColour(a){ if(a.other&&a.other.trim())return {name:a.other.trim(),code:"",hex:null,custom:true}; return a.colour; }
-function filledIn(list){ return list.filter(function(a){return a.include && chosenColour(a);}).length; }
+function areaFilled(a){ return a.asExisting || chosenColour(a); }
+function filledIn(list){ return list.filter(function(a){return a.include && areaFilled(a);}).length; }
 function filledCount(){ return filledIn(interiorAreas)+filledIn(exteriorAreas); }
-function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0; }
+function ackNeeded(){ return interiorAreas.concat(exteriorAreas).some(function(a){return a.include && a.asExisting && !a.ackMatch;}); }
+function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0 && !ackNeeded(); }
 
 /* ====================== RENDER ====================== */
 function render(){
@@ -329,21 +341,33 @@ function areaCard(a){
 
   var body=el("div","area-body");
 
-  var chosen=chosenColour(a);
-  var pk=el("button","pick"+(chosen?"":" empty"));
-  var sw=el("span","sw");
-  if(chosen&&chosen.hex)sw.style.background=chosen.hex;
-  if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
-  pk.appendChild(sw);
-  var lb=el("span","lbl");
-  if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
-  else { lb.textContent="Choose a colour"; }
-  pk.appendChild(lb);
-  var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
-  pk.onclick=function(){a.open=!a.open;render();};
-  body.appendChild(pk);
+  // "As existing" option
+  var ex=el("button","tickline"+(a.asExisting?" on":""));
+  ex.innerHTML="<span class='box'></span>Match existing colour (paint as existing)";
+  ex.onclick=function(){a.asExisting=!a.asExisting; if(a.asExisting)a.open=false; else a.ackMatch=false; render();};
+  body.appendChild(ex);
 
-  if(a.open) body.appendChild(swatchPanel(a));
+  if(a.asExisting){
+    var ack=el("button","ackbox"+(a.ackMatch?" on":""));
+    ack.innerHTML="<span class='box'></span><span class='ack-t'>I understand colour matches aren't always 100% accurate, and delivering a sample to the paint shop for matching may incur an extra charge.</span>";
+    ack.onclick=function(){a.ackMatch=!a.ackMatch; render();};
+    body.appendChild(ack);
+  } else {
+    var chosen=chosenColour(a);
+    var pk=el("button","pick"+(chosen?"":" empty"));
+    var sw=el("span","sw");
+    if(chosen&&chosen.hex)sw.style.background=chosen.hex;
+    if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
+    pk.appendChild(sw);
+    var lb=el("span","lbl");
+    if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
+    else { lb.textContent="Choose a colour"; }
+    pk.appendChild(lb);
+    var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
+    pk.onclick=function(){a.open=!a.open;render();};
+    body.appendChild(pk);
+    if(a.open) body.appendChild(swatchPanel(a));
+  }
 
   // finish as chips (no dropdown); recommended sheen marked in green
   var fw=el("div","finish");
@@ -403,7 +427,7 @@ function paintGrid(a,gw){
 }
 
 function addArea(){
-  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,note:"",open:false});
+  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,asExisting:false,ackMatch:false,note:"",open:false});
   render();
   setTimeout(function(){var inps=document.querySelectorAll("#areas .area-name input"); if(inps.length)inps[inps.length-1].focus();},30);
 }
@@ -413,6 +437,7 @@ function sendNote(){
   if(!client.name.trim())return "Add your name to start";
   if(!client.address.trim())return "Add the property address";
   if(filledCount()===0)return "Choose a colour for at least one area";
+  if(ackNeeded())return "Tick the colour-match note on your 'as existing' areas";
   var parts=[]; var i=filledIn(interiorAreas), x=filledIn(exteriorAreas);
   if(i)parts.push(i+" interior"); if(x)parts.push(x+" exterior");
   return parts.join(" + ")+" ready — goes straight to Taylor";
@@ -427,7 +452,11 @@ function submitBar(){
 }
 
 function collect(list, scope){
-  return list.filter(function(a){return a.include && chosenColour(a);}).map(function(a){ var c=chosenColour(a);
+  return list.filter(function(a){return a.include && areaFilled(a);}).map(function(a){
+    if(a.asExisting){
+      return {scope:scope, area:a.name||"(unnamed)", colour:"As existing (match existing colour)", code:"", finish:a.finish||"", note:(a.note||"").trim(), existing:true, ackMatch:!!a.ackMatch};
+    }
+    var c=chosenColour(a);
     return {scope:scope, area:a.name||"(unnamed)", colour:c.name, code:c.code||"", finish:a.finish||"", note:(a.note||"").trim(), custom:!!c.custom};
   });
 }
