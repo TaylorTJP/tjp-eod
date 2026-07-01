@@ -1,0 +1,457 @@
+<!-- TJP Colour Selection - client-facing, single file, no build step.
+     Vanilla JS so it drops straight into Claude Code / the tjp-eod repo.
+
+     Two tabs: INTERIOR and EXTERIOR - each its own page of colour line items.
+     No job dropdown: the client just enters their name + address + contact, and
+     picks colours per area. On submit it saves the selection and emails Taylor.
+
+     DEMO vs LIVE: leave API_URL as the placeholder and submissions just show a
+     confirmation (nothing saved). Paste your Apps Script /exec URL into API_URL
+     (see tjp-colours-backend.gs) to save into Drive + email you. That one line
+     is the only >>> SWAP POINT <<<.
+
+     LOGO: currently a built-in vector version of the TJP badge. To use the exact
+     logo file instead, save it next to this file as "tjp-logo.png" and replace
+     the LOGO_SVG usage in header()/showReceipt() with:
+        <img src="tjp-logo.png" alt="TJP"> -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>TJP · Colour selection</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --paper:#ECEAE3; --card:#FFFFFF;
+    --ink:#1C1F22; --ink-soft:#5C616A; --ink-faint:#8A8F97;
+    --line:#DCD8CE; --line-soft:#ECE9E1;
+    --green:#1C7A4B; --green-soft:#E7F1EB; --green-line:#BFE0CC;
+    --amber:#B86C12; --amber-soft:#FAEEDB; --amber-line:#EBCB97;
+    --band:#22282E; --radius:11px; --tap:48px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:520px;margin:0 auto;padding:0 0 130px}
+
+  .band{background:var(--band);color:#fff;padding:18px 20px 18px}
+  .band-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .logo{width:64px;height:64px;flex:none;border-radius:50%;overflow:hidden;background:#F7F6F1;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .logo svg{width:100%;height:100%;display:block}
+  .brandtxt b{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:23px;letter-spacing:.05em;text-transform:uppercase;color:#fff;display:block;line-height:1}
+  .brandtxt small{display:block;font-size:11px;font-weight:600;letter-spacing:.18em;color:#A9B0B8;margin-top:5px;text-transform:uppercase}
+  .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;text-align:right;line-height:1.6}
+  .docket b{color:#fff;font-weight:500}
+
+  .segn{display:flex;background:#2E353C;border-radius:9px;padding:3px;margin-top:16px}
+  .segn button{flex:1;appearance:none;border:0;cursor:pointer;background:transparent;color:#AEB4BC;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.1em;text-transform:uppercase;padding:11px 6px;border-radius:7px}
+  .segn button.on{background:var(--paper);color:var(--ink)}
+
+  .intro{padding:18px 16px 2px;color:var(--ink-soft);font-size:14.5px;line-height:1.5}
+  .pad{padding:14px 16px 0}
+  .sect{margin-bottom:20px}
+  .eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 10px 2px;display:flex;align-items:center;gap:8px}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .field{margin-bottom:12px}
+  label.lab{display:block;font-size:13.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px 2px}
+  input[type=text],textarea{width:100%;font-family:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:13px;outline:none}
+  textarea{min-height:60px;resize:vertical;line-height:1.4}
+  input:focus,textarea:focus{border-color:var(--band);box-shadow:0 0 0 3px rgba(34,40,46,.12)}
+
+  .area{background:var(--card);border:1.5px solid var(--line);border-radius:12px;margin-bottom:11px;overflow:hidden}
+  .area-head{display:flex;align-items:center;gap:10px;padding:13px 14px}
+  .area-name{flex:1;font-weight:700;font-size:16.5px}
+  .area-name input{font-weight:700;font-size:16px;padding:8px 10px}
+  .area-del{appearance:none;border:0;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:22px;line-height:1;padding:2px 6px;border-radius:7px}
+  .area-body{padding:0 14px 14px}
+
+  .pick{width:100%;appearance:none;cursor:pointer;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;min-height:var(--tap);display:flex;align-items:center;gap:12px;font-family:inherit;font-size:15.5px;font-weight:500;color:var(--ink)}
+  .pick .sw{width:26px;height:26px;border-radius:7px;border:1px solid rgba(0,0,0,.15);flex:none;background:#fff}
+  .pick .lbl{flex:1}
+  .pick .lbl b{display:block;font-weight:600}
+  .pick .lbl span{display:block;font-size:12.5px;color:var(--ink-faint);margin-top:1px}
+  .pick .chev{color:var(--ink-faint);font-size:13px}
+  .pick.empty .lbl{color:var(--ink-faint);font-weight:500}
+
+  .panel{margin-top:10px;border:1.5px solid var(--line);border-radius:11px;background:#FBFAF6;overflow:hidden}
+  .panel .search{padding:10px}
+  .panel .search input{background:#fff}
+  .grouplab{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);padding:4px 12px 6px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0 10px 10px}
+  .swatch{appearance:none;cursor:pointer;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:8px 9px;display:flex;align-items:center;gap:9px;font-family:inherit;font-size:13.5px;color:var(--ink);min-height:46px}
+  .swatch .box{width:24px;height:24px;border-radius:6px;border:1px solid rgba(0,0,0,.15);flex:none}
+  .swatch .nm{line-height:1.2}
+  .swatch .nm small{display:block;color:var(--ink-faint);font-size:11px;margin-top:1px}
+  .swatch.on{border-color:var(--band);box-shadow:0 0 0 2px rgba(34,40,46,.12)}
+  .other{border-top:1px solid var(--line);padding:11px}
+  .other label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px 2px}
+  .none{padding:14px;text-align:center;color:var(--ink-faint);font-size:13.5px}
+
+  .finish{margin-top:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px 12px;min-height:42px;font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .chip .box{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--line);flex:none;display:grid;place-items:center}
+  .chip.on{background:var(--green-soft);border-color:var(--green-line);color:#13502F}
+  .chip.on .box{background:var(--green);border-color:var(--green)}
+  .chip.on .box::after{content:"";width:4px;height:8px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
+  .roomnote{margin-top:12px}
+
+  .addarea{width:100%;appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:11px;padding:14px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink-soft);margin-bottom:8px}
+
+  .indic{display:flex;gap:9px;align-items:flex-start;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px;padding:11px 12px;margin:6px 0 2px;font-size:13px;color:#7A4A12;line-height:1.4}
+  .browse{margin:10px 0 2px}
+  .browse a{display:block;text-align:center;text-decoration:none;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px;font-size:13.5px;font-weight:600;color:var(--ink)}
+
+  .bar{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--paper) 72%,rgba(236,234,227,0));padding:14px 16px calc(16px + env(safe-area-inset-bottom))}
+  .bar-inner{max-width:520px;margin:0 auto}
+  .send{width:100%;appearance:none;border:0;cursor:pointer;background:var(--green);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;letter-spacing:.05em;text-transform:uppercase;padding:16px;border-radius:12px;min-height:56px;box-shadow:0 6px 18px rgba(28,122,75,.28)}
+  .send:disabled{background:#B9C2BB;box-shadow:none;cursor:not-allowed}
+  .send-note{text-align:center;font-size:12.5px;color:var(--ink-faint);margin-top:9px}
+
+  .receipt{padding:44px 22px}
+  .receipt .ok{width:74px;height:74px;border-radius:50%;background:var(--green-soft);border:2px solid var(--green-line);margin:0 auto 22px;display:grid;place-items:center}
+  .receipt .ok::after{content:"";width:18px;height:34px;border:5px solid var(--green);border-top:0;border-left:0;transform:rotate(40deg) translateY(-3px)}
+  .receipt h2{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:700;letter-spacing:.02em;margin:0 0 8px;text-transform:uppercase;text-align:center}
+  .receipt p{color:var(--ink-soft);margin:0 0 4px;text-align:center}
+  .receipt .ref{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-faint);margin-top:14px;text-align:center}
+  .receipt .scope-h{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:22px 2px 8px}
+  .receipt .sum{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:6px 14px}
+  .receipt .sum .r{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+  .receipt .sum .r:last-child{border-bottom:0}
+  .receipt .sum .box{width:20px;height:20px;border-radius:6px;border:1px solid rgba(0,0,0,.15);flex:none}
+  .receipt .sum .t{font-size:14px}
+  .receipt .sum .t b{display:block;font-weight:600}
+  .receipt .sum .t span{color:var(--ink-faint);font-size:12.5px}
+  .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app"></div>
+
+<script>
+/* ====================== CONFIG (edit these) ====================== */
+// >>> SWAP POINT <<<  Paste your Apps Script /exec Web app URL here to go live.
+var API_URL = "PASTE_YOUR_APPS_SCRIPT_URL";
+
+// Built-in vector logo (swap for <img src="tjp-logo.png"> to use the real file).
+var LOGO_SVG = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TJP - Taylor Johnston Painting">'
+  + '<circle cx="100" cy="100" r="99" fill="#F7F6F1"/>'
+  + '<circle cx="100" cy="100" r="94" fill="none" stroke="#141414" stroke-width="2.4"/>'
+  + '<circle cx="100" cy="100" r="85" fill="none" stroke="#141414" stroke-width="6"/>'
+  + '<text x="101" y="112" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="700" font-size="76" letter-spacing="2" fill="#141414">TJP</text>'
+  + '<text x="101" y="139" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="600" font-size="9.4" letter-spacing="1.3" fill="#141414">TAYLOR JOHNSTON PAINTING</text>'
+  + '</svg>';
+
+// Default line items per tab. Client can rename, remove, or add more.
+var DEFAULT_INTERIOR = [
+  {name:"Ceilings",        finish:"Flat / ceiling"},
+  {name:"Walls",           finish:"Low sheen"},
+  {name:"Cornices",        finish:"Flat / ceiling"},
+  {name:"Woodwork & trim", finish:"Semi-gloss"},
+  {name:"Doors",           finish:"Semi-gloss"},
+  {name:"Skirting boards", finish:"Semi-gloss"}
+];
+var DEFAULT_EXTERIOR = [
+  {name:"Weatherboards / render", finish:"Low sheen"},
+  {name:"Eaves & fascia",        finish:"Low sheen"},
+  {name:"Gutters & downpipes",   finish:"Satin"},
+  {name:"Window frames",         finish:"Semi-gloss"},
+  {name:"Doors",                 finish:"Semi-gloss"},
+  {name:"Garage door",           finish:"Satin"}
+];
+var FINISHES = ["Flat / ceiling","Low sheen","Satin","Semi-gloss","Gloss","Not sure"];
+
+// Curated Dulux colours. Hex values are INDICATIVE for on-screen swatches only.
+var COLOURS = [
+  {g:"Whites & off-whites", n:"Vivid White",            c:"W01A",  h:"#F4F3EE"},
+  {g:"Whites & off-whites", n:"Natural White",          c:"W16",   h:"#EFE9DA"},
+  {g:"Whites & off-whites", n:"Whisper White",          c:"SN1F2", h:"#ECE8DB"},
+  {g:"Whites & off-whites", n:"Lexicon Quarter",        c:"PG1H9", h:"#F1F2ED"},
+  {g:"Whites & off-whites", n:"White on White",         c:"PG1D9", h:"#EEEDE3"},
+  {g:"Whites & off-whites", n:"Antique White U.S.A.",   c:"W22",   h:"#E4DDC9"},
+  {g:"Whites & off-whites", n:"Casper White Quarter",   c:"ST1E3", h:"#E5E5DD"},
+  {g:"Whites & off-whites", n:"Terrace White",          c:"SN2D2", h:"#E8E3D4"},
+  {g:"Warm neutrals", n:"Hog Bristle Quarter",  c:"SN3E2", h:"#DBD3BE"},
+  {g:"Warm neutrals", n:"Hog Bristle Half",     c:"SN3E3", h:"#D2C8AE"},
+  {g:"Warm neutrals", n:"Ticking",              c:"SN2E4", h:"#C9C2B2"},
+  {g:"Warm neutrals", n:"Beige Royal",          c:"S0Y10", h:"#C7B99C"},
+  {g:"Warm neutrals", n:"Linseed",              c:"SN3F3", h:"#C6BA9F"},
+  {g:"Greys", n:"Grey Pail",       c:"SN1E1", h:"#CDCBC0"},
+  {g:"Greys", n:"Timeless Grey",   c:"SN1F4", h:"#B7B2A7"},
+  {g:"Greys", n:"Tranquil Retreat",c:"SN1G4", h:"#BFC1B8"},
+  {g:"Greys", n:"Milton Moon",     c:"SN1G6", h:"#9A968B"},
+  {g:"Greys", n:"Klavier",         c:"SN4F5", h:"#8C8B85"},
+  {g:"Greys", n:"Dieskau",         c:"SN4F8", h:"#6E6F6A"},
+  {g:"Greens & muted", n:"Wilderness",   c:"G23",   h:"#9BA08C"},
+  {g:"Greens & muted", n:"Highgate",     c:"SN2H8", h:"#6D7469"},
+  {g:"Greens & muted", n:"Oolong",       c:"SN5F4", h:"#8E8B7C"},
+  {g:"Greens & muted", n:"Rockcress",    c:"SN2G6", h:"#7F8676"},
+  {g:"Darks & charcoals", n:"Western Myall", c:"SN4H1", h:"#4B4844"},
+  {g:"Darks & charcoals", n:"Namadji",       c:"SN4H8", h:"#3B3C3D"},
+  {g:"Darks & charcoals", n:"Domino",        c:"SN4G9", h:"#34383B"},
+  {g:"Darks & charcoals", n:"Black",         c:"PN1N9", h:"#1D1D1D"}
+];
+
+/* ====================== STATE ====================== */
+var tab="Interior"; // Interior | Exterior
+var client={name:"",address:"",contact:""};
+var interiorAreas=[], exteriorAreas=[];
+var uid=1;
+
+function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,note:"",open:false};}); }
+function seed(){ interiorAreas=mk(DEFAULT_INTERIOR); exteriorAreas=mk(DEFAULT_EXTERIOR); }
+function curAreas(){ return tab==="Interior"?interiorAreas:exteriorAreas; }
+
+/* ====================== STORAGE (swap point) ====================== */
+function liveBackend(){return /^https?:\/\//.test(API_URL) && API_URL.indexOf("PASTE_YOUR")<0;}
+async function saveSelection(rec){
+  if(liveBackend()){
+    await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(rec)});
+    return;
+  }
+  try{ if(window.storage&&window.storage.set){ await window.storage.set("colours:"+rec.docket, JSON.stringify(rec), true);} }catch(e){}
+}
+
+/* ====================== HELPERS ====================== */
+function $(s,r){return (r||document).querySelector(s);}
+function el(t,c){var e=document.createElement(t);if(c)e.className=c;return e;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch];});}
+function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
+function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
+function chosenColour(a){ if(a.other&&a.other.trim())return {name:a.other.trim(),code:"",hex:null,custom:true}; return a.colour; }
+function filledIn(list){ return list.filter(function(a){return chosenColour(a);}).length; }
+function filledCount(){ return filledIn(interiorAreas)+filledIn(exteriorAreas); }
+function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0; }
+
+/* ====================== RENDER ====================== */
+function render(){
+  var app=$("#app"); app.innerHTML="";
+  app.appendChild(header());
+  app.appendChild(intro());
+  app.appendChild(form());
+  app.appendChild(submitBar());
+}
+
+function header(){
+  var wrap=el("div","wrap");
+  var band=el("div","band");
+  var top=el("div","band-top");
+  var brand=el("div","brand");
+  var logo=el("div","logo"); logo.innerHTML=LOGO_SVG; brand.appendChild(logo);
+  var bt=el("div","brandtxt"); bt.innerHTML="<b>Colour selection</b><small>Taylor Johnston Painting</small>"; brand.appendChild(bt);
+  top.appendChild(brand);
+  var dk=el("div","docket"); dk.innerHTML="<b>COLOURS</b><br>"+esc(todayISO()); top.appendChild(dk);
+  band.appendChild(top);
+  var seg=el("div","segn");
+  ["Interior","Exterior"].forEach(function(s){ var b=el("button",tab===s?"on":""); b.textContent=s; b.onclick=function(){tab=s;render();}; seg.appendChild(b); });
+  band.appendChild(seg);
+  wrap.appendChild(band);
+  return wrap;
+}
+
+function intro(){
+  var wrap=el("div","wrap");
+  var p=el("div","intro");
+  p.innerHTML="Enter your details, then pick colours for each area on the <b>Interior</b> and <b>Exterior</b> tabs. Fill in what you know — you can leave the rest. Hit send when you're done and it goes straight to Taylor.";
+  wrap.appendChild(p);
+  return wrap;
+}
+
+function form(){
+  var wrap=el("div","wrap"); var pad=el("div","pad");
+
+  // Client details (shared across both tabs)
+  var s=sect("Your details");
+  s.appendChild(textField("Your name", client.name, function(v){client.name=v;updateSend();}, "Name"));
+  s.appendChild(textField("Property address", client.address, function(v){client.address=v;updateSend();}, "Street, suburb"));
+  s.appendChild(textField("Best contact (phone or email)", client.contact, function(v){client.contact=v;}, "So Taylor can confirm with you"));
+  pad.appendChild(s);
+
+  // Tab colours
+  s=sect(tab+" colours");
+  var browse=el("div","browse");
+  var a=document.createElement("a");
+  if(tab==="Interior"){ a.href="https://www.dulux.com.au/colour/explore-colours"; a.textContent="Browse the full Dulux interior range"; }
+  else { a.href="https://www.dulux.com.au/colour/exterior-colour-schemes"; a.textContent="Browse Dulux exterior colour schemes"; }
+  a.target="_blank"; a.rel="noopener"; browse.appendChild(a); s.appendChild(browse);
+  var ind=el("div","indic");
+  ind.innerHTML="<span>🎨</span><span>Swatches on screen are a guide only — real paint can look different. For big decisions, ask us for a physical sample before you lock it in.</span>";
+  s.appendChild(ind);
+  pad.appendChild(s);
+
+  var list=el("div"); list.id="areas";
+  curAreas().forEach(function(ar){list.appendChild(areaCard(ar));});
+  pad.appendChild(list);
+
+  var add=el("button","addarea"); add.textContent="+  Add another area";
+  add.onclick=function(){addArea();}; pad.appendChild(add);
+
+  wrap.appendChild(pad); return wrap;
+}
+
+function sect(t){var s=el("div","sect");var e=el("p","eyebrow");e.textContent=t;s.appendChild(e);return s;}
+function lab(t){var l=el("label","lab");l.textContent=t;return l;}
+function textField(labelText, val, oninput, placeholder){
+  var fld=el("div","field"); fld.appendChild(lab(labelText));
+  var i=document.createElement("input"); i.type="text"; i.value=val||""; if(placeholder)i.placeholder=placeholder;
+  i.oninput=function(e){oninput(e.target.value);}; fld.appendChild(i); return fld;
+}
+
+function areaCard(a){
+  var card=el("div","area");
+  var head=el("div","area-head");
+  var nm=el("div","area-name");
+  if(a.fixed){ nm.textContent=a.name; }
+  else{ var ni=document.createElement("input"); ni.type="text"; ni.value=a.name; ni.placeholder="Area (e.g. Hallway)"; ni.oninput=function(e){a.name=e.target.value;}; nm.appendChild(ni); }
+  head.appendChild(nm);
+  var del=el("button","area-del"); del.innerHTML="&times;"; del.title="Remove"; del.onclick=function(){ interiorAreas=interiorAreas.filter(function(x){return x.id!==a.id;}); exteriorAreas=exteriorAreas.filter(function(x){return x.id!==a.id;}); render(); };
+  head.appendChild(del); card.appendChild(head);
+
+  var body=el("div","area-body");
+
+  var chosen=chosenColour(a);
+  var pk=el("button","pick"+(chosen?"":" empty"));
+  var sw=el("span","sw");
+  if(chosen&&chosen.hex)sw.style.background=chosen.hex;
+  if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
+  pk.appendChild(sw);
+  var lb=el("span","lbl");
+  if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
+  else { lb.textContent="Choose a colour"; }
+  pk.appendChild(lb);
+  var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
+  pk.onclick=function(){a.open=!a.open;render();};
+  body.appendChild(pk);
+
+  if(a.open) body.appendChild(swatchPanel(a));
+
+  // finish as chips (no dropdown)
+  var fw=el("div","finish"); fw.appendChild(lab("Finish / sheen"));
+  var chips=el("div","chips");
+  FINISHES.forEach(function(fn){ var c=el("button","chip"+(a.finish===fn?" on":"")); c.innerHTML="<span class='box'></span>"+esc(fn); c.onclick=function(){a.finish=(a.finish===fn?"":fn);render();}; chips.appendChild(c); });
+  fw.appendChild(chips); body.appendChild(fw);
+
+  var rn=el("div","roomnote"); rn.appendChild(lab("Note — optional (e.g. which rooms, feature wall)"));
+  var nt=document.createElement("textarea"); nt.value=a.note; nt.placeholder="Anything specific for this area"; nt.oninput=function(e){a.note=e.target.value;};
+  rn.appendChild(nt); body.appendChild(rn);
+
+  card.appendChild(body);
+  return card;
+}
+
+function swatchPanel(a){
+  var p=el("div","panel");
+  var sb=el("div","search");
+  var si=document.createElement("input"); si.type="text"; si.placeholder="Search colours..."; si.value=a._q||"";
+  si.oninput=function(e){a._q=e.target.value; repaintGrid(a,p);};
+  sb.appendChild(si); p.appendChild(sb);
+  var gw=el("div","gridwrap"); p.appendChild(gw); paintGrid(a,gw);
+  var other=el("div","other");
+  var ol=document.createElement("label"); ol.textContent="Can't see it? Type your colour"; other.appendChild(ol);
+  var oi=document.createElement("input"); oi.type="text"; oi.value=a.other||""; oi.placeholder="e.g. Dulux Snowy Mountains Half, or a custom mix";
+  oi.oninput=function(e){a.other=e.target.value; if(e.target.value.trim())a.colour=null; updateSend();};
+  other.appendChild(oi); p.appendChild(other);
+  return p;
+}
+function repaintGrid(a,panel){ var gw=panel.querySelector(".gridwrap"); if(gw)paintGrid(a,gw); }
+function paintGrid(a,gw){
+  gw.innerHTML="";
+  var q=(a._q||"").trim().toLowerCase();
+  var matches=COLOURS.filter(function(c){return !q||c.n.toLowerCase().indexOf(q)>=0||(c.c&&c.c.toLowerCase().indexOf(q)>=0);});
+  if(!matches.length){ var n=el("div","none"); n.textContent="No matches — use “Type your colour” below."; gw.appendChild(n); return; }
+  var groups=matches.map(function(c){return c.g;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+  groups.forEach(function(g){
+    var gl=el("div","grouplab"); gl.textContent=g; gw.appendChild(gl);
+    var grid=el("div","grid");
+    matches.filter(function(c){return c.g===g;}).forEach(function(c){
+      var on=a.colour&&a.colour.name===c.n;
+      var b=el("button","swatch"+(on?" on":""));
+      var bx=el("span","box"); bx.style.background=c.h; b.appendChild(bx);
+      var nm=el("span","nm"); nm.innerHTML=esc(c.n)+"<small>Dulux "+esc(c.c)+"</small>"; b.appendChild(nm);
+      b.onclick=function(){ a.colour={name:c.n,code:c.c,hex:c.h}; a.other=""; a.open=false; render(); };
+      grid.appendChild(b);
+    });
+    gw.appendChild(grid);
+  });
+}
+
+function addArea(){
+  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",note:"",open:false});
+  render();
+  setTimeout(function(){var inps=document.querySelectorAll("#areas .area-name input"); if(inps.length)inps[inps.length-1].focus();},30);
+}
+
+function updateSend(){var b=$(".send");if(b)b.disabled=!canSend();var n=$(".send-note");if(n)n.textContent=sendNote();}
+function sendNote(){
+  if(!client.name.trim())return "Add your name to start";
+  if(!client.address.trim())return "Add the property address";
+  if(filledCount()===0)return "Choose a colour for at least one area";
+  var parts=[]; var i=filledIn(interiorAreas), x=filledIn(exteriorAreas);
+  if(i)parts.push(i+" interior"); if(x)parts.push(x+" exterior");
+  return parts.join(" + ")+" ready — goes straight to Taylor";
+}
+
+function submitBar(){
+  var bar=el("div","bar"); var inner=el("div","bar-inner");
+  var b=el("button","send"); b.textContent="Send my colours to Taylor"; b.disabled=!canSend(); b.onclick=doSubmit;
+  inner.appendChild(b);
+  var note=el("div","send-note"); note.textContent=sendNote(); inner.appendChild(note);
+  bar.appendChild(inner); return bar;
+}
+
+function collect(list, scope){
+  return list.filter(function(a){return chosenColour(a);}).map(function(a){ var c=chosenColour(a);
+    return {scope:scope, area:a.name||"(unnamed)", colour:c.name, code:c.code||"", finish:a.finish||"", note:(a.note||"").trim(), custom:!!c.custom};
+  });
+}
+async function doSubmit(){
+  if(!canSend())return;
+  var b=$(".send"); b.disabled=true; b.textContent="Sending...";
+  var items=collect(interiorAreas,"Interior").concat(collect(exteriorAreas,"Exterior"));
+  var rec={
+    type:"colour-selection",
+    date:todayISO(), time:nowTime(),
+    docket:"COL-"+todayISO().replace(/-/g,"")+"-"+(slug(client.address).slice(0,12)||slug(client.name).slice(0,10)||"job"),
+    client_name:client.name.trim(), client_address:client.address.trim(), client_contact:client.contact.trim(),
+    items:items
+  };
+  try{ await saveSelection(rec); }catch(e){}
+  showReceipt(rec);
+}
+
+function showReceipt(rec){
+  var app=$("#app"); app.innerHTML="";
+  app.appendChild(header());
+  var wrap=el("div","wrap"); var r=el("div","receipt");
+  r.appendChild(el("div","ok"));
+  var h=el("h2"); h.textContent="Colours sent"; r.appendChild(h);
+  var p1=el("p"); p1.textContent="Thanks"+(rec.client_name?(" "+rec.client_name):"")+" — sent to Taylor at "+rec.time+"."; r.appendChild(p1);
+  var p2=el("p"); p2.textContent="He'll be in touch to confirm before anything's ordered."; r.appendChild(p2);
+  ["Interior","Exterior"].forEach(function(scope){
+    var items=rec.items.filter(function(it){return it.scope===scope;});
+    if(!items.length)return;
+    var hh=el("div","scope-h"); hh.textContent=scope; r.appendChild(hh);
+    var sum=el("div","sum");
+    items.forEach(function(it){
+      var row=el("div","r");
+      var bx=el("span","box"); var found=COLOURS.filter(function(c){return c.n===it.colour;})[0];
+      bx.style.background=found?found.h:"repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
+      row.appendChild(bx);
+      var t=el("div","t"); t.innerHTML="<b>"+esc(it.area)+"</b><span>"+esc(it.colour)+(it.finish?(" · "+esc(it.finish)):"")+"</span>";
+      row.appendChild(t); sum.appendChild(row);
+    });
+    r.appendChild(sum);
+  });
+  var ref=el("div","ref"); ref.textContent=rec.docket; r.appendChild(ref);
+  wrap.appendChild(r); app.appendChild(wrap);
+}
+
+/* ====================== GO ====================== */
+(function initFromURL(){
+  try{ var q=new URLSearchParams(location.search); var t=q.get("tab"); if(t&&["Interior","Exterior"].indexOf(t)>=0)tab=t; }catch(e){}
+})();
+seed();
+render();
+</script>
