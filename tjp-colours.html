@@ -33,22 +33,22 @@
   body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
   .wrap{max-width:520px;margin:0 auto;padding:0 0 130px}
 
-  .band{background:var(--band);color:#fff;padding:18px 20px 18px}
+  .band{background:var(--band);color:#fff;padding:13px 20px 12px}
   .band-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .brand{display:flex;align-items:center;gap:13px}
-  .logo{width:64px;height:64px;flex:none;border-radius:50%;overflow:hidden;background:#F7F6F1;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+  .logo{width:50px;height:50px;flex:none;border-radius:50%;overflow:hidden;background:#F7F6F1;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
   .logo svg{width:100%;height:100%;display:block}
   .brandtxt b{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:23px;letter-spacing:.05em;text-transform:uppercase;color:#fff;display:block;line-height:1}
   .brandtxt small{display:block;font-size:11px;font-weight:600;letter-spacing:.18em;color:#A9B0B8;margin-top:5px;text-transform:uppercase}
   .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;text-align:right;line-height:1.6}
   .docket b{color:#fff;font-weight:500}
 
-  .segn{display:flex;background:#2E353C;border-radius:9px;padding:3px;margin-top:16px}
-  .segn button{flex:1;appearance:none;border:0;cursor:pointer;background:transparent;color:#AEB4BC;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.1em;text-transform:uppercase;padding:11px 6px;border-radius:7px}
+  .segn{display:flex;background:#2E353C;border-radius:9px;padding:3px;margin-top:10px}
+  .segn button{flex:1;appearance:none;border:0;cursor:pointer;background:transparent;color:#AEB4BC;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.1em;text-transform:uppercase;padding:9px 6px;border-radius:7px}
   .segn button.on{background:var(--paper);color:var(--ink)}
 
-  .intro{padding:18px 16px 2px;color:var(--ink-soft);font-size:14.5px;line-height:1.5}
-  .pad{padding:14px 16px 0}
+  .intro{padding:10px 16px 0;color:var(--ink-soft);font-size:13.5px;line-height:1.42}
+  .pad{padding:8px 16px 0}
   .sect{margin-bottom:20px}
   .eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 10px 2px;display:flex;align-items:center;gap:8px}
   .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
@@ -291,7 +291,7 @@ function header(){
 function intro(){
   var wrap=el("div","wrap");
   var p=el("div","intro");
-  p.innerHTML="Enter your details, then work down the <b>Interior</b> and <b>Exterior</b> tabs. <b>Untick any areas we're not painting</b>, and pick a colour for the rest. The sheen marked in green is our recommendation. Hit send when you're done.";
+  p.innerHTML="Enter your details, then work down the <b>Interior</b> and <b>Exterior</b> tabs. <b>Untick any areas we're not painting</b>, and pick a colour for the rest. The sheen marked in green is our recommendation. Hit send when you're done. Taylor will be in touch about colours if needed.";
   wrap.appendChild(p);
   return wrap;
 }
