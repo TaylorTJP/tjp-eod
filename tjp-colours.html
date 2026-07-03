@@ -165,7 +165,6 @@ var LOGO_SVG = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" ro
 var DEFAULT_INTERIOR = [
   {name:"Ceilings",        finish:"Flat / ceiling"},
   {name:"Walls",           finish:"Low sheen"},
-  {name:"Cornices",        finish:"Flat / ceiling"},
   {name:"Woodwork & trim", finish:"Semi-gloss"},
   {name:"Doors",           finish:"Semi-gloss"},
   {name:"Skirting boards", finish:"Semi-gloss"}
@@ -218,7 +217,7 @@ var client={name:"",address:"",contact:""};
 var interiorAreas=[], exteriorAreas=[];
 var uid=1;
 
-function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,asExisting:false,ackMatch:false,note:"",open:false};}); }
+function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,asExisting:false,ackMatch:false,note:"",open:false,sameAsTrim:false,vividAck:false};}); }
 function seed(){ interiorAreas=mk(DEFAULT_INTERIOR); exteriorAreas=mk(DEFAULT_EXTERIOR); }
 function curAreas(){ return tab==="Interior"?interiorAreas:exteriorAreas; }
 
@@ -239,11 +238,28 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(ch){retu
 function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
-function chosenColour(a){ if(a.other&&a.other.trim())return {name:a.other.trim(),code:"",hex:null,custom:true}; return a.colour; }
+function trimAreaFor(a){
+  if(!/^doors$/i.test((a.name||"").trim())) return null;
+  return curAreas().filter(function(x){return x.id!==a.id && /woodwork\s*&\s*trim/i.test(x.name||"");})[0] || null;
+}
+function chosenColour(a){
+  if(a.sameAsTrim){ var t=trimAreaFor(a); if(t) return chosenColour(t); }
+  if(a.other&&a.other.trim())return {name:a.other.trim(),code:"",hex:null,custom:true};
+  return a.colour;
+}
+function effectiveFinish(a){ if(a.sameAsTrim){ var t=trimAreaFor(a); if(t) return t.finish; } return a.finish; }
+function isVivid(c){ return !!c && !c.custom && /^vivid white$/i.test(c.name||""); }
 function areaFilled(a){ return a.asExisting || chosenColour(a); }
 function filledIn(list){ return list.filter(function(a){return a.include && areaFilled(a);}).length; }
 function filledCount(){ return filledIn(interiorAreas)+filledIn(exteriorAreas); }
-function ackNeeded(){ return interiorAreas.concat(exteriorAreas).some(function(a){return a.include && a.asExisting && !a.ackMatch;}); }
+function ackNeeded(){
+  return interiorAreas.concat(exteriorAreas).some(function(a){
+    if(!a.include) return false;
+    if(a.asExisting && !a.ackMatch) return true;
+    if(!a.sameAsTrim && !a.asExisting && isVivid(chosenColour(a)) && !a.vividAck) return true;
+    return false;
+  });
+}
 function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0 && !ackNeeded(); }
 
 /* ====================== RENDER ====================== */
@@ -294,8 +310,8 @@ function form(){
   s=sect(tab+" colours");
   var browse=el("div","browse");
   var a=document.createElement("a");
-  if(tab==="Interior"){ a.href="https://www.dulux.com.au/colour/explore-colours"; a.textContent="Browse the full Dulux interior range"; }
-  else { a.href="https://www.dulux.com.au/colour/exterior-colour-schemes"; a.textContent="Browse Dulux exterior colour schemes"; }
+  if(tab==="Interior"){ a.href="https://www.dulux.com.au/colour/schemes-styles/schemes/interior/"; a.textContent="Browse the full Dulux interior range"; }
+  else { a.href="https://www.dulux.com.au/colour/schemes-styles/schemes/exterior/"; a.textContent="Browse Dulux exterior colour schemes"; }
   a.target="_blank"; a.rel="noopener"; browse.appendChild(a); s.appendChild(browse);
   var ind=el("div","indic");
   ind.innerHTML="<span>🎨</span><span>Swatches on screen are a guide only — real paint can look different. For big decisions, ask us for a physical sample before you lock it in.</span>";
@@ -341,46 +357,78 @@ function areaCard(a){
 
   var body=el("div","area-body");
 
-  // "As existing" option
-  var ex=el("button","tickline"+(a.asExisting?" on":""));
-  ex.innerHTML="<span class='box'></span>Match existing colour (paint as existing)";
-  ex.onclick=function(){a.asExisting=!a.asExisting; if(a.asExisting)a.open=false; else a.ackMatch=false; render();};
-  body.appendChild(ex);
-
-  if(a.asExisting){
-    var ack=el("button","ackbox"+(a.ackMatch?" on":""));
-    ack.innerHTML="<span class='box'></span><span class='ack-t'>I understand colour matches aren't always 100% accurate, and delivering a sample to the paint shop for matching may incur an extra charge.</span>";
-    ack.onclick=function(){a.ackMatch=!a.ackMatch; render();};
-    body.appendChild(ack);
-  } else {
-    var chosen=chosenColour(a);
-    var pk=el("button","pick"+(chosen?"":" empty"));
-    var sw=el("span","sw");
-    if(chosen&&chosen.hex)sw.style.background=chosen.hex;
-    if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
-    pk.appendChild(sw);
-    var lb=el("span","lbl");
-    if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
-    else { lb.textContent="Choose a colour"; }
-    pk.appendChild(lb);
-    var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
-    pk.onclick=function(){a.open=!a.open;render();};
-    body.appendChild(pk);
-    if(a.open) body.appendChild(swatchPanel(a));
+  // "Same colour as Woodwork & trim" option (Doors only, when a trim area exists)
+  var trimSrc=trimAreaFor(a);
+  if(trimSrc){
+    var same=el("button","tickline"+(a.sameAsTrim?" on":""));
+    same.innerHTML="<span class='box'></span>Same colour as Woodwork & trim";
+    same.onclick=function(){ a.sameAsTrim=!a.sameAsTrim; if(a.sameAsTrim){ a.asExisting=false; a.ackMatch=false; a.open=false; } render(); };
+    body.appendChild(same);
   }
 
-  // finish as chips (no dropdown); recommended sheen marked in green
-  var fw=el("div","finish");
-  var fl=el("label","lab"); fl.innerHTML="Finish / sheen <span class='reclegend'>green = our recommendation</span>"; fw.appendChild(fl);
-  var chips=el("div","chips");
-  FINISHES.forEach(function(fn){
-    var isRec=(fn===a.recommended);
-    var c=el("button","chip"+(a.finish===fn?" on":"")+(isRec?" rec":""));
-    c.innerHTML="<span class='box'></span>"+esc(fn)+(isRec?"<span class='rectag'>Recommended</span>":"");
-    c.onclick=function(){a.finish=(a.finish===fn?"":fn);render();};
-    chips.appendChild(c);
-  });
-  fw.appendChild(chips); body.appendChild(fw);
+  if(a.sameAsTrim){
+    var inh=chosenColour(a);
+    var info=el("div","pick");
+    var isw=el("span","sw");
+    if(inh&&inh.hex) isw.style.background=inh.hex;
+    else if(inh) isw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
+    info.appendChild(isw);
+    var ilb=el("span","lbl");
+    if(inh){ ilb.innerHTML="<b>"+esc(inh.name)+"</b>"+(inh.code?"<span>Dulux "+esc(inh.code)+" · matches trim</span>":"<span>Matches trim</span>"); }
+    else { ilb.textContent="Set a colour on Woodwork & trim first"; }
+    info.appendChild(ilb);
+    body.appendChild(info);
+  } else {
+    // "As existing" option
+    var ex=el("button","tickline"+(a.asExisting?" on":""));
+    ex.innerHTML="<span class='box'></span>Match existing colour (paint as existing)";
+    ex.onclick=function(){a.asExisting=!a.asExisting; if(a.asExisting)a.open=false; else a.ackMatch=false; render();};
+    body.appendChild(ex);
+
+    if(a.asExisting){
+      var ack=el("button","ackbox"+(a.ackMatch?" on":""));
+      ack.innerHTML="<span class='box'></span><span class='ack-t'>I understand colour matches aren't always 100% accurate, and delivering a sample to the paint shop for matching may incur an extra charge.</span>";
+      ack.onclick=function(){a.ackMatch=!a.ackMatch; render();};
+      body.appendChild(ack);
+    } else {
+      var chosen=chosenColour(a);
+      var pk=el("button","pick"+(chosen?"":" empty"));
+      var sw=el("span","sw");
+      if(chosen&&chosen.hex)sw.style.background=chosen.hex;
+      if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
+      pk.appendChild(sw);
+      var lb=el("span","lbl");
+      if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
+      else { lb.textContent="Choose a colour"; }
+      pk.appendChild(lb);
+      var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
+      pk.onclick=function(){a.open=!a.open;render();};
+      body.appendChild(pk);
+      if(a.open) body.appendChild(swatchPanel(a));
+
+      if(!a.open && isVivid(chosen)){
+        var vack=el("button","ackbox"+(a.vividAck?" on":""));
+        vack.innerHTML="<span class='box'></span><span class='ack-t'>Vivid White has no tint, so it can need an extra coat for full coverage. Lexicon Quarter is a very similar white that covers more easily — happy to go with Vivid White anyway.</span>";
+        vack.onclick=function(){a.vividAck=!a.vividAck; render();};
+        body.appendChild(vack);
+      }
+    }
+  }
+
+  // finish as chips (no dropdown); recommended sheen marked in green — skipped when colour is inherited from trim
+  if(!a.sameAsTrim){
+    var fw=el("div","finish");
+    var fl=el("label","lab"); fl.innerHTML="Finish / sheen <span class='reclegend'>green = our recommendation</span>"; fw.appendChild(fl);
+    var chips=el("div","chips");
+    FINISHES.forEach(function(fn){
+      var isRec=(fn===a.recommended);
+      var c=el("button","chip"+(a.finish===fn?" on":"")+(isRec?" rec":""));
+      c.innerHTML="<span class='box'></span>"+esc(fn)+(isRec?"<span class='rectag'>Recommended</span>":"");
+      c.onclick=function(){a.finish=(a.finish===fn?"":fn);render();};
+      chips.appendChild(c);
+    });
+    fw.appendChild(chips); body.appendChild(fw);
+  }
 
   var rn=el("div","roomnote"); rn.appendChild(lab("Note — optional (e.g. which rooms, feature wall)"));
   var nt=document.createElement("textarea"); nt.value=a.note; nt.placeholder="Anything specific for this area"; nt.oninput=function(e){a.note=e.target.value;};
@@ -427,7 +475,7 @@ function paintGrid(a,gw){
 }
 
 function addArea(){
-  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,asExisting:false,ackMatch:false,note:"",open:false});
+  curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,asExisting:false,ackMatch:false,note:"",open:false,sameAsTrim:false,vividAck:false});
   render();
   setTimeout(function(){var inps=document.querySelectorAll("#areas .area-name input"); if(inps.length)inps[inps.length-1].focus();},30);
 }
@@ -437,7 +485,7 @@ function sendNote(){
   if(!client.name.trim())return "Add your name to start";
   if(!client.address.trim())return "Add the property address";
   if(filledCount()===0)return "Choose a colour for at least one area";
-  if(ackNeeded())return "Tick the colour-match note on your 'as existing' areas";
+  if(ackNeeded())return "Tick the confirmation note showing on one or more areas";
   var parts=[]; var i=filledIn(interiorAreas), x=filledIn(exteriorAreas);
   if(i)parts.push(i+" interior"); if(x)parts.push(x+" exterior");
   return parts.join(" + ")+" ready — goes straight to Taylor";
@@ -454,10 +502,10 @@ function submitBar(){
 function collect(list, scope){
   return list.filter(function(a){return a.include && areaFilled(a);}).map(function(a){
     if(a.asExisting){
-      return {scope:scope, area:a.name||"(unnamed)", colour:"As existing (match existing colour)", code:"", finish:a.finish||"", note:(a.note||"").trim(), existing:true, ackMatch:!!a.ackMatch};
+      return {scope:scope, area:a.name||"(unnamed)", colour:"As existing (match existing colour)", code:"", finish:effectiveFinish(a)||"", note:(a.note||"").trim(), existing:true, ackMatch:!!a.ackMatch};
     }
     var c=chosenColour(a);
-    return {scope:scope, area:a.name||"(unnamed)", colour:c.name, code:c.code||"", finish:a.finish||"", note:(a.note||"").trim(), custom:!!c.custom};
+    return {scope:scope, area:a.name||"(unnamed)"+(a.sameAsTrim?" (matches Woodwork & trim)":""), colour:c.name, code:c.code||"", finish:effectiveFinish(a)||"", note:(a.note||"").trim(), custom:!!c.custom};
   });
 }
 async function doSubmit(){
