@@ -365,13 +365,13 @@ function header(){
   dk.innerHTML = view==="crew"
     ? "<b>EOD-"+todayISO().replace(/-/g,"")+(f.worker?("-"+initials(f.worker)):"")+"</b><br>"+prettyDate(todayISO())
     : view==="touch"
-    ? "<b>TOUCH-UP</b><br>"+(touchJob?touchJob:"Pick a job")
+    ? "<b>FINISHING STAGES</b><br>"+(touchJob?touchJob:"Pick a job")
     : "<b>SUPERVISOR</b><br>"+prettyDate(supDate);
   top.appendChild(dk); band.appendChild(top);
   const tg=el("div","toggle");
   const b1=el("button",view==="crew"?"on":"","Crew");
   const b2=el("button",view==="super"?"on":"","Supervisor");
-  const b3=el("button",view==="touch"?"on":"","Touch-up");
+  const b3=el("button",view==="touch"?"on":"","Finishing");
   b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();}; b3.onclick=()=>{view="touch";render();};
   tg.appendChild(b1);tg.appendChild(b2);tg.appendChild(b3); band.appendChild(tg);
   wrap.appendChild(band); return wrap;
@@ -707,7 +707,7 @@ function renderTouch(app){
   addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
 
   // Finishing (supervisor sign-off)
-  s=sect("Finishing — supervisor sign-off");
+  s=sect("Finished surfaces — supervisor sign-off");
   FINISH.forEach(stage=>{
     const row=touchData.find(x=>x.type==="finish"&&x.item===stage);
     const done=row&&row.done;
@@ -745,5 +745,4 @@ async function loadJobs(){
   }catch(e){}
 }
 render();
-loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(); });
-</script>
+loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(
