@@ -228,6 +228,12 @@ const GEAR = [
 ];
 const PACK_ALL = [...CLEAN,...GEAR];
 
+// Standard finishing milestones (same on every job). Ticking one needs a
+// supervisor sign-off. Edit this list freely.
+const FINISH = ["Ceilings","Walls","Doors","Door frames & architraves","Skirting boards","Windows & sills","Trims / feature","Final touch-up walk-through","Site clean & gear out"];
+// Who can sign off finishing stages. "Other" lets you type whoever ran the job.
+const SUPERVISORS = ["Brydon","Michael"];
+
 /* ====================== STORAGE LAYER ====================== */
 // >>> BACKEND SWAP POINT <<<  (Phase 2 — now wired to the Google Sheet)
 // saveSubmission POSTs a flat record to the Apps Script, which appends it as
@@ -306,6 +312,16 @@ async function loadDay(dateStr){
   return out;
 }
 
+// ---- Touch-up / finishing punch-list (shared, per job) ----
+async function tuLoad(job){
+  if(!liveBackend()||!job)return [];
+  try{const r=await fetch(API_URL+"?touchups="+encodeURIComponent(job));const d=await r.json();return Array.isArray(d)?d:[];}catch(e){return [];}
+}
+async function tuSet(o){
+  if(!liveBackend())return;
+  try{await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({action:"touchup"},o))});}catch(e){}
+}
+
 /* ====================== HELPERS ====================== */
 const $=(s,r=document)=>r.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
@@ -322,6 +338,8 @@ function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 
 /* ====================== STATE ====================== */
 let view="crew", supDate=todayISO(), f=blankForm();
+// Touch-up view state
+let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false;
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
@@ -334,6 +352,7 @@ function render(){
   const app=$("#app"); app.innerHTML="";
   app.appendChild(header());
   if(view==="crew"){app.appendChild(coverage());app.appendChild(crewForm());app.appendChild(submitBar());}
+  else if(view==="touch"){renderTouch(app);}
   else renderSupervisor(app);
 }
 
@@ -345,13 +364,16 @@ function header(){
   const dk=el("div","docket");
   dk.innerHTML = view==="crew"
     ? "<b>EOD-"+todayISO().replace(/-/g,"")+(f.worker?("-"+initials(f.worker)):"")+"</b><br>"+prettyDate(todayISO())
+    : view==="touch"
+    ? "<b>TOUCH-UP</b><br>"+(touchJob?touchJob:"Pick a job")
     : "<b>SUPERVISOR</b><br>"+prettyDate(supDate);
   top.appendChild(dk); band.appendChild(top);
   const tg=el("div","toggle");
-  const b1=el("button",view==="crew"?"on":"","Crew checklist");
+  const b1=el("button",view==="crew"?"on":"","Crew");
   const b2=el("button",view==="super"?"on":"","Supervisor");
-  b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();};
-  tg.appendChild(b1);tg.appendChild(b2); band.appendChild(tg);
+  const b3=el("button",view==="touch"?"on":"","Touch-up");
+  b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();}; b3.onclick=()=>{view="touch";render();};
+  tg.appendChild(b1);tg.appendChild(b2);tg.appendChild(b3); band.appendChild(tg);
   wrap.appendChild(band); return wrap;
 }
 
@@ -616,6 +638,99 @@ function crewCard(s){
   c.appendChild(body);
   h.onclick=()=>c.classList.toggle("open");
   return c;
+}
+
+/* ====================== TOUCH-UP ====================== */
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+async function loadTouch(){
+  if(!touchJob){touchData=[];render();return;}
+  tuLoading=true;render();
+  touchData=await tuLoad(touchJob);
+  tuLoading=false;render();
+}
+async function toggleTouch(it){
+  it.done=!it.done;                       // optimistic
+  render();
+  await tuSet({job:touchJob,type:"touchup",item:it.item,done:it.done,done_by:touchPerson||""});
+}
+async function addTouch(){
+  const txt=(tuAddText||"").trim(); if(!txt)return;
+  if(!touchData.some(x=>x.type==="touchup"&&x.item.toLowerCase()===txt.toLowerCase()))
+    touchData.push({job:touchJob,type:"touchup",item:txt,done:false,done_by:"",done_at:"",supervisor:""});
+  tuAddText="";render();
+  await tuSet({job:touchJob,type:"touchup",item:txt,done:false,done_by:touchPerson||""});
+}
+async function setFinish(stage,done,sup){
+  pendingFinish=null;otherSup="";otherSupName="";
+  let row=touchData.find(x=>x.type==="finish"&&x.item===stage);
+  if(!row){row={job:touchJob,type:"finish",item:stage,done:false,done_by:"",done_at:"",supervisor:""};touchData.push(row);}
+  row.done=done;row.supervisor=done?sup:"";row.done_by=done?(touchPerson||""):"";
+  render();
+  await tuSet({job:touchJob,type:"finish",item:stage,done:done,done_by:touchPerson||"",supervisor:sup});
+}
+
+function renderTouch(app){
+  const wrap=el("div","wrap");const pad=el("div","pad");
+  // Job picker
+  let s=sect("Which job?");
+  let fld=el("div","field");
+  const sel=el("select");
+  sel.appendChild(new Option("Pick a job...",""));
+  JOBS.forEach(j=>{const o=new Option(j,j);if(touchJob===j)o.selected=true;sel.appendChild(o);});
+  sel.onchange=e=>{touchJob=e.target.value;touchPerson=null;pendingFinish=null;loadTouch();};
+  fld.appendChild(sel);s.appendChild(fld);pad.appendChild(s);
+
+  if(!touchJob){
+    pad.appendChild(el("div","empty","Pick a job to see its touch-ups and finishing checklist."));
+    wrap.appendChild(pad);app.appendChild(wrap);return;
+  }
+  // Who's checking (optional, records who ticked)
+  s=sect("Who's checking (optional)");
+  fld=el("div","field");const who=el("div","who");
+  CREW.forEach(c=>{const b=el("button",touchPerson===c.name?"on":"",c.name);b.onclick=()=>{touchPerson=(touchPerson===c.name?null:c.name);render();};who.appendChild(b);});
+  fld.appendChild(who);s.appendChild(fld);pad.appendChild(s);
+
+  if(tuLoading){pad.appendChild(el("div","empty","Loading the list..."));wrap.appendChild(pad);app.appendChild(wrap);return;}
+
+  // Touch-ups
+  s=sect("Touch-ups");
+  const items=touchData.filter(x=>x.type==="touchup");
+  if(!items.length)s.appendChild(el("div","hint","No touch-ups yet. Add any you spot below."));
+  items.forEach(it=>{
+    const t=el("button","tick"+(it.done?" on":""),"<span class='box'></span>"+escapeHtml(it.item)+(it.done&&it.done_by?" <small style='color:#8A8F97'>· "+escapeHtml(it.done_by)+"</small>":""));
+    t.onclick=()=>toggleTouch(it);s.appendChild(t);
+  });
+  const addWrap=el("div","field");addWrap.style.marginTop="10px";
+  const ai=el("input");ai.type="text";ai.placeholder="Add a touch-up you spotted...";ai.value=tuAddText;ai.oninput=e=>{tuAddText=e.target.value;};
+  const ab=el("button","chip","+ Add");ab.style.marginTop="8px";ab.onclick=()=>addTouch();
+  addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
+
+  // Finishing (supervisor sign-off)
+  s=sect("Finishing — supervisor sign-off");
+  FINISH.forEach(stage=>{
+    const row=touchData.find(x=>x.type==="finish"&&x.item===stage);
+    const done=row&&row.done;
+    const t=el("button","tick primary"+(done?" on":""),"<span class='box'></span>"+stage+(done&&row.supervisor?" <small style='color:#13502F;font-weight:600'>✓ "+escapeHtml(row.supervisor)+"</small>":""));
+    t.onclick=()=>{ if(done){setFinish(stage,false,"");} else {pendingFinish=stage;otherSup="";render();} };
+    s.appendChild(t);
+    if(pendingFinish===stage){
+      const sign=el("div","callout");sign.style.display="block";
+      sign.appendChild(el("div",null,"<b>Signed off by which supervisor?</b>"));
+      const w2=el("div","who");w2.style.marginTop="8px";
+      SUPERVISORS.forEach(sup=>{const b=el("button","",sup);b.onclick=()=>setFinish(stage,true,sup);w2.appendChild(b);});
+      const bo=el("button",otherSup==="__typing__"?"on":"","Other");bo.onclick=()=>{otherSup="__typing__";render();};w2.appendChild(bo);
+      sign.appendChild(w2);
+      if(otherSup==="__typing__"){
+        const oi=el("input");oi.type="text";oi.placeholder="Type who ran the job";oi.style.marginTop="8px";oi.value=otherSupName;oi.oninput=e=>{otherSupName=e.target.value;};
+        const ok=el("button","chip","Sign off");ok.style.marginTop="8px";ok.onclick=()=>{if(otherSupName.trim())setFinish(stage,true,otherSupName.trim());};
+        sign.appendChild(oi);sign.appendChild(ok);
+      }
+      s.appendChild(sign);
+    }
+  });
+  pad.appendChild(s);
+  wrap.appendChild(pad);app.appendChild(wrap);
 }
 
 /* ====================== GO ====================== */
