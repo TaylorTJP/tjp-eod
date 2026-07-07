@@ -745,4 +745,5 @@ async function loadJobs(){
   }catch(e){}
 }
 render();
-loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(
+loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(); });
+</script>
