@@ -165,6 +165,13 @@
   .pd span.miss{color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-line);font-weight:600}
   .empty{text-align:center;color:var(--ink-faint);padding:34px 20px;font-size:14.5px}
   .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
+
+  .guide-toggle{appearance:none;border:0;background:none;cursor:pointer;color:var(--green);font-family:inherit;font-size:13px;font-weight:600;padding:2px;margin:-2px 0 12px 2px;display:inline-block}
+  .guide{background:var(--card);border:1.5px solid var(--line);border-left:3px solid var(--green);border-radius:9px;padding:13px 14px;margin:-2px 0 14px}
+  .guide h4{margin:0 0 9px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.01em;color:var(--ink)}
+  .guide ol{margin:0;padding-left:20px}
+  .guide li{font-size:14px;line-height:1.5;color:var(--ink-soft);margin-bottom:7px}
+  .guide li:last-child{margin-bottom:0}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -233,6 +240,28 @@ const PACK_ALL = [...CLEAN,...GEAR];
 const FINISH = ["Ceilings","Walls","Doors","Door frames & architraves","Skirting boards","Windows & sills","Trims / feature","Final touch-up walk-through","Site clean & gear out"];
 // Who can sign off finishing stages. "Other" lets you type whoever ran the job.
 const SUPERVISORS = ["Brydon","Michael"];
+
+// Per-stage "how we do it" reference guides, shown as an expandable panel
+// under that stage in the Finishing tab. Add more stages here the same way.
+const FINISH_GUIDES = {
+  "Doors": {
+    header: "1st job is to finish doors",
+    steps: [
+      "Set up doors in a room against the walls (chocked up on timber)",
+      "Sand down full door (pole float or hand float)",
+      "Dust down with duster and rag down",
+      "Top, bottom and side edges first",
+      "Roll full face of doors",
+      "Rotate and finish other side",
+      "Sand down walls with pole float (use sanding block or 120 grit sandpaper for internal edges). While pole floating, put tape next to patches (or use pencil to circle)",
+      "Patch walls — use a LED light across the wall to show up patches",
+      "Sand patches and touch up with low sheen",
+      "Apply 1 x coat to ceiling flat at top of wall (from spray-out ceiling coat)",
+      "Cut in walls and roll 1 x full coat",
+      "Wet areas should be sealed and 1 coat on a spray-out. Once we return for finishing coats, apply 1 x coat after tiling, before silicon"
+    ]
+  }
+};
 
 /* ====================== STORAGE LAYER ====================== */
 // >>> BACKEND SWAP POINT <<<  (Phase 2 — now wired to the Google Sheet)
@@ -350,7 +379,7 @@ function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 /* ====================== STATE ====================== */
 let view="crew", supDate=todayISO(), f=blankForm();
 // Touch-up view state
-let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false;
+let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false, openGuide=null;
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
@@ -757,6 +786,20 @@ function renderTouch(app){
     const t=el("button","tick primary"+(done?" on":""),"<span class='box'></span>"+stage+(done&&row.supervisor?" <small style='color:#13502F;font-weight:600'>✓ "+escapeHtml(row.supervisor)+"</small>":""));
     t.onclick=()=>{ if(done){setFinish(stage,false,"");} else {pendingFinish=stage;otherSup="";render();} };
     s.appendChild(t);
+    const guide=FINISH_GUIDES[stage];
+    if(guide){
+      const tgl=el("button","guide-toggle",openGuide===stage?"Hide how-to ▴":"How to finish this ▾");
+      tgl.onclick=()=>{openGuide=(openGuide===stage?null:stage);render();};
+      s.appendChild(tgl);
+      if(openGuide===stage){
+        const g=el("div","guide");
+        g.appendChild(el("h4",null,escapeHtml(guide.header)));
+        const ol=el("ol");
+        guide.steps.forEach(st=>ol.appendChild(el("li",null,escapeHtml(st))));
+        g.appendChild(ol);
+        s.appendChild(g);
+      }
+    }
     if(pendingFinish===stage){
       const sign=el("div","callout");sign.style.display="block";
       sign.appendChild(el("div",null,"<b>Signed off by which supervisor?</b>"));
