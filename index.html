@@ -169,6 +169,8 @@
   .guide-toggle{appearance:none;border:0;background:none;cursor:pointer;color:var(--green);font-family:inherit;font-size:13px;font-weight:600;padding:2px;margin:-2px 0 12px 2px;display:inline-block}
   .guide{background:var(--card);border:1.5px solid var(--line);border-left:3px solid var(--green);border-radius:9px;padding:13px 14px;margin:-2px 0 14px}
   .guide h4{margin:0 0 9px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.01em;color:var(--ink)}
+  .guide .step{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.01em;color:var(--ink);margin:14px 0 5px}
+  .guide .step:first-child{margin-top:0}
   .guide ol{margin:0;padding-left:20px}
   .guide li{font-size:14px;line-height:1.5;color:var(--ink-soft);margin-bottom:7px}
   .guide li:last-child{margin-bottom:0}
@@ -241,26 +243,54 @@ const FINISH = ["Ceilings","Walls","Doors","Door frames & architraves","Skirting
 // Who can sign off finishing stages. "Other" lets you type whoever ran the job.
 const SUPERVISORS = ["Brydon","Michael"];
 
-// Per-stage "how we do it" reference guides, shown as an expandable panel
-// under that stage in the Finishing tab. Add more stages here the same way.
-const FINISH_GUIDES = {
-  "Doors": {
-    header: "1st job is to finish doors",
-    steps: [
-      "Set up doors in a room against the walls (chocked up on timber)",
-      "Sand down full door (pole float or hand float)",
-      "Dust down with duster and rag down",
-      "Top, bottom and side edges first",
-      "Roll full face of doors",
-      "Rotate and finish other side",
-      "Sand down walls with pole float (use sanding block or 120 grit sandpaper for internal edges). While pole floating, put tape next to patches (or use pencil to circle)",
-      "Patch walls — use a LED light across the wall to show up patches",
-      "Sand patches and touch up with low sheen",
-      "Apply 1 x coat to ceiling flat at top of wall (from spray-out ceiling coat)",
-      "Cut in walls and roll 1 x full coat",
-      "Wet areas should be sealed and 1 coat on a spray-out. Once we return for finishing coats, apply 1 x coat after tiling, before silicon"
-    ]
-  }
+// The finishing order of operations — the system for how a job gets finished,
+// step by step. Shown as one expandable reference panel at the top of the
+// "Finished surfaces" section in the Finishing tab. Edit steps/items freely.
+const FINISH_ORDER = {
+  header: "Finishing order",
+  steps: [
+    {
+      title: "1. Doors",
+      items: [
+        "Set up doors in the room, chocked up on timber",
+        "Pole float doors, dust down and rag down",
+        "Top, bottom and side edges first",
+        "Roll full face of doors",
+        "Rotate and finish the other side"
+      ]
+    },
+    {
+      title: "2. Walls",
+      items: [
+        "Pole float walls (sanding block or 120 grit sandpaper for edges)",
+        "While patching walls, also patch hard floor area skirtings",
+        "Sanding — tape next to patches, or circle with pencil",
+        "Patch walls — use a light across the wall to show up the patches",
+        "Sand patches and touch up with low sheen",
+        "Apply 1 coat of low sheen over ceiling spray that landed on walls and around architraves",
+        "Cut in and roll 1 full coat"
+      ]
+    },
+    {
+      title: "3. Wet areas",
+      items: [
+        "Seal and apply 1 coat on the spray-out",
+        "Once back on site for finishing coats, finish the wet area ceilings"
+      ]
+    },
+    {
+      title: "4. Skirts",
+      items: [
+        "Finish skirts over hard floors"
+      ]
+    },
+    {
+      title: "5. Clean out",
+      items: [
+        "Full clean out — get all paint and gear out of the house"
+      ]
+    }
+  ]
 };
 
 /* ====================== STORAGE LAYER ====================== */
@@ -379,7 +409,7 @@ function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 /* ====================== STATE ====================== */
 let view="crew", supDate=todayISO(), f=blankForm();
 // Touch-up view state
-let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false, openGuide=null;
+let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false, showOrder=false;
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
@@ -765,41 +795,29 @@ function renderTouch(app){
 
   if(tuLoading){pad.appendChild(el("div","empty","Loading the list..."));wrap.appendChild(pad);app.appendChild(wrap);return;}
 
-  // Touch-ups
-  s=sect("Touch-ups");
-  const items=touchData.filter(x=>x.type==="touchup");
-  if(!items.length)s.appendChild(el("div","hint","No touch-ups yet. Add any you spot below."));
-  items.forEach(it=>{
-    const t=el("button","tick"+(it.done?" on":""),"<span class='box'></span>"+escapeHtml(it.item)+(it.done&&it.done_by?" <small style='color:#8A8F97'>· "+escapeHtml(it.done_by)+"</small>":""));
-    t.onclick=()=>toggleTouch(it);s.appendChild(t);
-  });
-  const addWrap=el("div","field");addWrap.style.marginTop="10px";
-  const ai=el("input");ai.type="text";ai.placeholder="Add a touch-up you spotted...";ai.value=tuAddText;ai.oninput=e=>{tuAddText=e.target.value;};
-  const ab=el("button","chip","+ Add");ab.style.marginTop="8px";ab.onclick=()=>addTouch();
-  addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
-
-  // Finishing (supervisor sign-off)
+  // Finishing (supervisor sign-off) — includes the finishing order of
+  // operations reference panel at the top, then the surface sign-off ticks.
   s=sect("Finished surfaces — supervisor sign-off");
+  const otgl=el("button","guide-toggle",showOrder?"Hide finishing order ▴":"Finishing order ▾");
+  otgl.onclick=()=>{showOrder=!showOrder;render();};
+  s.appendChild(otgl);
+  if(showOrder){
+    const g=el("div","guide");
+    g.appendChild(el("h4",null,escapeHtml(FINISH_ORDER.header)));
+    FINISH_ORDER.steps.forEach(step=>{
+      g.appendChild(el("div","step",escapeHtml(step.title)));
+      const ol=el("ol");
+      step.items.forEach(it=>ol.appendChild(el("li",null,escapeHtml(it))));
+      g.appendChild(ol);
+    });
+    s.appendChild(g);
+  }
   FINISH.forEach(stage=>{
     const row=touchData.find(x=>x.type==="finish"&&x.item===stage);
     const done=row&&row.done;
     const t=el("button","tick primary"+(done?" on":""),"<span class='box'></span>"+stage+(done&&row.supervisor?" <small style='color:#13502F;font-weight:600'>✓ "+escapeHtml(row.supervisor)+"</small>":""));
     t.onclick=()=>{ if(done){setFinish(stage,false,"");} else {pendingFinish=stage;otherSup="";render();} };
     s.appendChild(t);
-    const guide=FINISH_GUIDES[stage];
-    if(guide){
-      const tgl=el("button","guide-toggle",openGuide===stage?"Hide how-to ▴":"How to finish this ▾");
-      tgl.onclick=()=>{openGuide=(openGuide===stage?null:stage);render();};
-      s.appendChild(tgl);
-      if(openGuide===stage){
-        const g=el("div","guide");
-        g.appendChild(el("h4",null,escapeHtml(guide.header)));
-        const ol=el("ol");
-        guide.steps.forEach(st=>ol.appendChild(el("li",null,escapeHtml(st))));
-        g.appendChild(ol);
-        s.appendChild(g);
-      }
-    }
     if(pendingFinish===stage){
       const sign=el("div","callout");sign.style.display="block";
       sign.appendChild(el("div",null,"<b>Signed off by which supervisor?</b>"));
@@ -816,6 +834,20 @@ function renderTouch(app){
     }
   });
   pad.appendChild(s);
+
+  // Touch-ups — now below the finishing order + surface sign-off
+  s=sect("Touch-ups");
+  const items=touchData.filter(x=>x.type==="touchup");
+  if(!items.length)s.appendChild(el("div","hint","No touch-ups yet. Add any you spot below."));
+  items.forEach(it=>{
+    const t=el("button","tick"+(it.done?" on":""),"<span class='box'></span>"+escapeHtml(it.item)+(it.done&&it.done_by?" <small style='color:#8A8F97'>· "+escapeHtml(it.done_by)+"</small>":""));
+    t.onclick=()=>toggleTouch(it);s.appendChild(t);
+  });
+  const addWrap=el("div","field");addWrap.style.marginTop="10px";
+  const ai=el("input");ai.type="text";ai.placeholder="Add a touch-up you spotted...";ai.value=tuAddText;ai.oninput=e=>{tuAddText=e.target.value;};
+  const ab=el("button","chip","+ Add");ab.style.marginTop="8px";ab.onclick=()=>addTouch();
+  addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
+
   wrap.appendChild(pad);app.appendChild(wrap);
 }
 
