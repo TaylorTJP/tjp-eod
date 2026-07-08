@@ -166,7 +166,10 @@
   .empty{text-align:center;color:var(--ink-faint);padding:34px 20px;font-size:14.5px}
   .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
 
-  .guide-toggle{appearance:none;border:0;background:none;cursor:pointer;color:var(--green);font-family:inherit;font-size:13px;font-weight:600;padding:2px;margin:-2px 0 12px 2px;display:inline-block}
+  .guide-toggle{width:100%;appearance:none;border:0;cursor:pointer;background:var(--green);color:#fff;border-radius:11px;padding:16px 18px;margin:0 0 14px;min-height:var(--tap);display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;box-shadow:0 6px 16px rgba(28,122,75,.3)}
+  .guide-toggle .gt-label{display:flex;align-items:center;gap:9px}
+  .guide-toggle .chev{font-size:15px;transition:transform .2s ease;flex:none}
+  .guide-toggle.open .chev{transform:rotate(180deg)}
   .guide{background:var(--card);border:1.5px solid var(--line);border-left:3px solid var(--green);border-radius:9px;padding:13px 14px;margin:-2px 0 14px}
   .guide h4{margin:0 0 9px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.01em;color:var(--ink)}
   .guide .step{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.01em;color:var(--ink);margin:14px 0 5px}
@@ -200,7 +203,7 @@ const CREW = [
   {name:"Jaydon",  role:"Apprentice"},
 ];
 const ROLE_ORDER = ["Supervisor","Tradesman","Apprentice"];
-const ORDER_CUTOFF_MIN = 15*60 + 30; // 3:30pm
+const ORDER_CUTOFF_MIN = 15*60 + 45; // 3:45pm
 
 // Your current jobs (the dropdown). Seeded with recent jobs as placeholders, swap
 // for your live list. In the deployed version this loads from the master sheet's
@@ -217,7 +220,7 @@ let JOBS = [
 const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
 
 const FLAGS = [
-  {key:"makegood", extra:true,    q:"Make-good or repairs outside the original scope?", sub:"Fixing damage or patching beyond the quote. What and where?"},
+  {key:"makegood", extra:true,    q:"Any extra trade damage we had to fix?", sub:"Fixing damage or patching beyond the quote. What and where?"},
   {key:"variation", extra:true,   q:"Extra work or changes asked for on site?",        sub:"Who asked (builder/client) and what they wanted."},
   {key:"holdup",                  q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable."},
   {key:"materials", delivery:true,q:"Checked paint & stock levels, anything low?",     sub:"Paint, tints, consumables. Custom tints especially, they're slow."},
@@ -234,6 +237,7 @@ const GEAR = [
   {key:"spray",  t:"Spray gear flushed & cleaned"},
   {key:"secure", t:"Tools & gear secured / locked up"},
   {key:"tidy",   t:"All gear stacked in a tidy line, neat for next day"},
+  {key:"dried",  t:"Has all paint been wiped away and trays and pots allowed to dry for the next day?"},
 ];
 const PACK_ALL = [...CLEAN,...GEAR];
 
@@ -242,6 +246,9 @@ const PACK_ALL = [...CLEAN,...GEAR];
 const FINISH = ["Ceilings","Walls","Doors","Door frames & architraves","Skirting boards","Windows & sills","Trims / feature","Final touch-up walk-through","Site clean & gear out"];
 // Who can sign off finishing stages. "Other" lets you type whoever ran the job.
 const SUPERVISORS = ["Brydon","Michael"];
+// PIN to unlock the Supervisor tab — share this only with Brydon, Michael and yourself.
+// Change it any time by editing this line.
+const SUP_PIN = "2580";
 
 // The finishing order of operations — the system for how a job gets finished,
 // step by step. Shown as one expandable reference panel at the top of the
@@ -308,13 +315,13 @@ function flattenRec(rec){
   return {
     date:rec.date, time:rec.time, docket:rec.docket,
     worker:rec.worker, role:rec.role, job:rec.job, jobListed:rec.jobListed,
-    tasks:rec.workDone, prep:(rec.prep||[]).join(", "), photos:rec.photos,
+    tasks:rec.workDone, jobUpdate:rec.jobUpdate, prep:(rec.prep||[]).join(", "), photos:rec.photos,
     makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note,
     variation_hrs:fl.variation.hours, variation_note:fl.variation.note,
     holdup_note:fl.holdup.note, materials_note:fl.materials.note,
     clean_neverhere:rec.pack.neverhere, clean_rubbish:rec.pack.rubbish,
     clean_food:rec.pack.food, clean_masking:rec.pack.masking, clean_wiped:rec.pack.wiped,
-    gear_spray:rec.pack.spray, gear_secure:rec.pack.secure, gear_tidy:rec.pack.tidy,
+    gear_spray:rec.pack.spray, gear_secure:rec.pack.secure, gear_tidy:rec.pack.tidy, gear_dried:rec.pack.dried,
     notes:rec.notes
   };
 }
@@ -326,7 +333,7 @@ function rehydrateRow(r){
   return {
     date:t(r.date), time:t(r.time), docket:t(r.docket), ts:0,
     worker:t(r.worker), role:t(r.role), job:t(r.job), jobListed:b(r.jobListed),
-    workDone:t(r.tasks),
+    workDone:t(r.tasks), jobUpdate:t(r.jobUpdate),
     prep:t(r.prep)?t(r.prep).split(/,\s*/).filter(Boolean):[],
     photos:b(r.photos),
     flags:{
@@ -338,7 +345,7 @@ function rehydrateRow(r){
     pack:{
       neverhere:b(r.clean_neverhere), rubbish:b(r.clean_rubbish), food:b(r.clean_food),
       masking:b(r.clean_masking), wiped:b(r.clean_wiped),
-      spray:b(r.gear_spray), secure:b(r.gear_secure), tidy:b(r.gear_tidy)
+      spray:b(r.gear_spray), secure:b(r.gear_secure), tidy:b(r.gear_tidy), dried:b(r.gear_dried)
     },
     notes:t(r.notes)
   };
@@ -410,10 +417,14 @@ function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 let view="crew", supDate=todayISO(), f=blankForm();
 // Touch-up view state
 let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false, showOrder=false;
+// Supervisor tab PIN lock — unlocked state is remembered per device via localStorage
+// so Brydon/Michael/you only need to enter it once on your own phone.
+let supUnlocked=false, supPinTry="", supPinErr="";
+try{ if(window.localStorage && localStorage.getItem("tjp_sup_unlocked")==="1") supUnlocked=true; }catch(e){}
 function blankForm(){
-  return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
+  return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
-    pack:{neverhere:false,rubbish:false,food:false,masking:false,wiped:false,spray:false,secure:false,tidy:false},
+    pack:{neverhere:false,rubbish:false,food:false,masking:false,wiped:false,spray:false,secure:false,tidy:false,dried:false},
     notes:"",
     // apprentice "owner's way" reflection (only used/shown for apprentices)
     appr:{onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
@@ -531,11 +542,18 @@ function crewForm(){
   fld=el("div","field");fld.appendChild(lab("What tasks did you work on today?"));
   const wd=el("textarea");wd.value=f.workDone;wd.placeholder="Short version, e.g. 2nd coat to north + east walls, started window frames";
   wd.oninput=e=>{f.workDone=e.target.value;updateProgress();};fld.appendChild(wd);s.appendChild(fld);
-  fld=el("div","field");fld.appendChild(lab("Prep stages done"));
+  fld=el("div","field");fld.appendChild(lab("Prep stages worked on today"));
   const chips=el("div","chips");
   PREP.forEach(p=>{const c=el("button","chip"+(f.prep[p]?" on":""),"<span class='box'></span>"+p);c.onclick=()=>{f.prep[p]=!f.prep[p];render();};chips.appendChild(c);});
   fld.appendChild(chips);s.appendChild(fld);
-  const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work");
+  pad.appendChild(s);
+
+  // Job update for Taylor & Michael
+  s=sect("Job update for Taylor & Michael");
+  fld=el("div","field");
+  const ju=el("textarea");ju.value=f.jobUpdate;ju.placeholder="Please update Taylor and Michael on where the tasks are up to — what's been finished, what's nearly finished?";
+  ju.oninput=e=>{f.jobUpdate=e.target.value;};fld.appendChild(ju);s.appendChild(fld);
+  const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work <small style='color:#8A8F97'>(photos help the job update x10)</small>");
   ph.onclick=()=>{f.photos=!f.photos;render();};s.appendChild(ph);
   pad.appendChild(s);
 
@@ -554,8 +572,8 @@ function crewForm(){
       const before=nowMin()<ORDER_CUTOFF_MIN;
       const co=el("div","callout"+(before?"":" late"));
       co.innerHTML="<span class='clk'>"+(before?"🕒":"📦")+"</span><span>"+(before
-        ?"Get the order in <b>before 3:30</b> and it'll be delivered. You've still got time."
-        :"It's <b>past 3:30</b> now, so flag it here and it'll go on the next order.")+"</span>";
+        ?"Get the order in <b>before 3:45</b> and it'll be delivered. You've still got time."
+        :"It's <b>past 3:45</b> now, so flag it here and it'll go on the next order.")+"</span>";
       body.appendChild(co);
     }
     if(fl.extra){
@@ -650,7 +668,31 @@ function showReceipt(rec){
 }
 
 /* ====================== SUPERVISOR ====================== */
+function supervisorLock(app){
+  const wrap=el("div","wrap");const pad=el("div","pad");
+  const s=sect("Supervisor access");
+  s.appendChild(el("div","hint","This section is just for Brydon, Michael and Taylor. Enter the PIN to continue."));
+  const fld=el("div","field");fld.appendChild(lab("PIN"));
+  const inp=el("input");inp.type="tel";inp.inputMode="numeric";inp.placeholder="Enter PIN";inp.value=supPinTry;
+  inp.oninput=e=>{supPinTry=e.target.value;};
+  fld.appendChild(inp);s.appendChild(fld);
+  if(supPinErr)s.appendChild(el("div","hint",supPinErr));
+  const btn=el("button","send","Unlock");btn.style.boxShadow="none";
+  btn.onclick=()=>{
+    if(supPinTry.trim()===SUP_PIN){
+      supUnlocked=true;supPinErr="";supPinTry="";
+      try{if(window.localStorage)localStorage.setItem("tjp_sup_unlocked","1");}catch(e){}
+      render();
+    }else{
+      supPinErr="Wrong PIN, try again.";supPinTry="";render();
+    }
+  };
+  s.appendChild(btn);
+  pad.appendChild(s);wrap.appendChild(pad);app.appendChild(wrap);
+}
+
 async function renderSupervisor(app){
+  if(!supUnlocked){ supervisorLock(app); return; }
   const wrap=el("div","wrap super");
   const head=el("div","sup-head");
   head.appendChild(el("div","ttl","Today on site"));
@@ -731,6 +773,7 @@ function crewCard(s){
     body.appendChild(r);
   });
   if(s.workDone){const r=el("div","row");r.appendChild(el("div","k","Tasks worked on"));r.appendChild(el("div","v",s.workDone));body.appendChild(r);}
+  if(s.jobUpdate){const r=el("div","row");r.appendChild(el("div","k","Job update for Taylor & Michael"));r.appendChild(el("div","v",s.jobUpdate));body.appendChild(r);}
   if(s.prep&&s.prep.length){const r=el("div","row");r.appendChild(el("div","k","Prep"));const pd=el("div","pd");s.prep.forEach(p=>pd.appendChild(el("span",null,p)));r.appendChild(pd);body.appendChild(r);}
   const r=el("div","row");r.appendChild(el("div","k","Clean-up & gear"));const pd=el("div","pd");
   PACK_ALL.forEach(p=>{const done=s.pack[p.key];const label=p.key==="neverhere"?"Looked like we were never here":p.t;pd.appendChild(el("span",done?"":"miss",(done?"✓ ":"✗ ")+label));});
@@ -798,7 +841,7 @@ function renderTouch(app){
   // Finishing (supervisor sign-off) — includes the finishing order of
   // operations reference panel at the top, then the surface sign-off ticks.
   s=sect("Finished surfaces — supervisor sign-off");
-  const otgl=el("button","guide-toggle",showOrder?"Hide finishing order ▴":"Finishing order ▾");
+  const otgl=el("button","guide-toggle"+(showOrder?" open":""),"<span class='gt-label'>📋 "+(showOrder?"Hide finishing order":"Finishing order — tap to view")+"</span><span class='chev'>▾</span>");
   otgl.onclick=()=>{showOrder=!showOrder;render();};
   s.appendChild(otgl);
   if(showOrder){
