@@ -322,6 +322,17 @@ async function tuSet(o){
   try{await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({action:"touchup"},o))});}catch(e){}
 }
 
+// Apprentice "owner's way" reflection -> Apprentice sheet
+async function saveAppr(rec){
+  if(!liveBackend())return;
+  const a=f.appr, yn=v=>v===true?"Yes":v===false?"No":"";
+  const body={action:"apprentice",date:rec.date,time:rec.time,worker:rec.worker,job:rec.job,
+    on_time:yn(a.onTime),started_right:yn(a.startedRight),spotted:yn(a.spotted),quality_100:yn(a.quality100),
+    lead_did_well:(a.wellNote||"").trim(),lead_not_100:(a.notWellNote||"").trim(),lead_timeframe:(a.timeframe||"").trim(),
+    tomorrow_ready:yn(a.tomorrowReady),tomorrow_note:(a.tomorrowNote||"").trim()};
+  await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
+}
+
 /* ====================== HELPERS ====================== */
 const $=(s,r=document)=>r.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
@@ -344,8 +355,11 @@ function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
     pack:{neverhere:false,rubbish:false,food:false,masking:false,wiped:false,spray:false,secure:false,tidy:false},
-    notes:""};
+    notes:"",
+    // apprentice "owner's way" reflection (only used/shown for apprentices)
+    appr:{onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
 }
+function isAppr(){return f.worker && roleOf(f.worker)==="Apprentice";}
 
 /* ====================== RENDER ====================== */
 function render(){
@@ -424,6 +438,34 @@ function crewForm(){
   s.appendChild(fld);
 
   pad.appendChild(s);
+
+  // Apprentice — "the owner's way" reflection (only for apprentices)
+  if(isAppr()){
+    s=sect("The owner's way");
+    s.appendChild(el("div","hint","Before you sign off — the questions that turn a painter into a tradesman."));
+    const yn=(q,key,sub)=>{
+      const fl=el("div","field");
+      fl.appendChild(el("label","lab",q));
+      if(sub)fl.appendChild(el("div","hint",sub));
+      const w=el("div","who");w.style.marginTop="6px";
+      ["Yes","No"].forEach(v=>{const on=f.appr[key]===(v==="Yes");const b=el("button",on?"on":"",v);b.onclick=()=>{f.appr[key]=(v==="Yes");render();};w.appendChild(b);});
+      fl.appendChild(w);return fl;
+    };
+    s.appendChild(yn("On the tools on time today?","onTime"));
+    s.appendChild(yn("Did I start where it mattered — not the easiest bit?","startedRight"));
+    s.appendChild(yn("Spot anything outside the quote, or any surface not sound?","spotted","If yes, flag it in “Flag to Taylor” below."));
+    s.appendChild(yn("Is my work 100% — anything the boss would want redone?","quality100"));
+    const leadFld=el("div","field");leadFld.style.marginTop="4px";
+    leadFld.appendChild(el("label","lab","Ask your lead today — and write down what they say:"));
+    const mk=(ph,key)=>{const i=el("input");i.type="text";i.placeholder=ph;i.value=f.appr[key];i.style.marginTop="6px";i.oninput=e=>{f.appr[key]=e.target.value;};return i;};
+    leadFld.appendChild(mk("What did I do well?","wellNote"));
+    leadFld.appendChild(mk("What wasn't 100%?","notWellNote"));
+    leadFld.appendChild(mk("Did I get today's tasks done in a good time frame?","timeframe"));
+    s.appendChild(leadFld);
+    s.appendChild(yn("Do I know exactly what I'm starting on tomorrow? Gear, paint, access sorted?","tomorrowReady"));
+    const tf=el("div","field");const tn=el("textarea");tn.value=f.appr.tomorrowNote;tn.placeholder="Anything to line up for tomorrow (optional)";tn.oninput=e=>{f.appr.tomorrowNote=e.target.value;};tf.appendChild(tn);s.appendChild(tf);
+    pad.appendChild(s);
+  }
 
   // Today's work
   s=sect("Today's work");
@@ -527,6 +569,7 @@ async function doSubmit(){
     flags:{},pack:{...f.pack},notes:f.notes.trim()};
   FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0};});
   try{await saveSubmission(rec);}catch(e){}
+  if(isAppr()){ try{await saveAppr(rec);}catch(e){} }
   showReceipt(rec);
 }
 
