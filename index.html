@@ -75,6 +75,19 @@
   .tick.primary .box{width:27px;height:27px;border-radius:7px}
   .tick.primary .box::after{width:7px;height:13px}
 
+  /* yes / no / n-a question rows */
+  .qrow{background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:9px}
+  .qrow .qt{font-size:15.5px;font-weight:500;color:var(--ink);margin-bottom:10px;line-height:1.35}
+  .qrow.primary .qt{font-size:17.5px;font-weight:700}
+  .qrow .opts{display:flex;gap:7px}
+  .qrow .opts button{flex:1;appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:10px 6px;min-height:var(--tap);font-family:inherit;font-size:14.5px;font-weight:700;color:var(--ink-soft)}
+  .qrow .opts button.yes.on{background:var(--green);border-color:var(--green);color:#fff}
+  .qrow .opts button.no.on{background:var(--amber);border-color:var(--amber);color:#fff}
+  .qrow .opts button.na.on{background:var(--band);border-color:var(--band);color:#fff}
+  .qrow.ans-yes{background:var(--green-soft);border-color:var(--green-line)}
+  .qrow.ans-note{background:var(--amber-soft);border-color:var(--amber-line)}
+  .qrow textarea{margin-top:10px;border-color:var(--amber-line)}
+
   /* flag rows */
   .flag{background:var(--card);border:1.5px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
   .flag-head{width:100%;appearance:none;cursor:pointer;text-align:left;background:transparent;border:0;padding:14px;display:flex;align-items:flex-start;gap:12px;font-family:inherit;color:var(--ink)}
@@ -100,6 +113,12 @@
   .callout.late{background:#F3EFE7;border-color:var(--line);color:var(--ink-soft)}
   .callout .clk{font-size:15px;line-height:1.2}
   .callout b{font-weight:700}
+
+  /* job update — the most important bit */
+  .sect.jobupdate{border:2px solid var(--green);border-radius:13px;padding:15px 13px 11px;background:#F4F9F5}
+  .jobupdate-callout{background:var(--green);color:#fff;border-radius:10px;padding:12px 14px;margin:0 0 12px;font-size:13.5px;line-height:1.5}
+  .jobupdate-callout b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+  .sect.jobupdate textarea{min-height:100px;border-color:var(--green-line)}
 
   .notes-sect textarea{min-height:90px}
 
@@ -163,6 +182,7 @@
   .pd{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
   .pd span{font-size:13px;color:var(--ink-soft);background:#F1EEE6;border-radius:6px;padding:4px 9px}
   .pd span.miss{color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-line);font-weight:600}
+  .pd span.nax{color:var(--ink-soft);background:#EEF1F3;border:1px solid var(--line)}
   .empty{text-align:center;color:var(--ink-faint);padding:34px 20px;font-size:14.5px}
   .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
 
@@ -205,16 +225,14 @@ const CREW = [
 const ROLE_ORDER = ["Supervisor","Tradesman","Apprentice"];
 const ORDER_CUTOFF_MIN = 15*60 + 45; // 3:45pm
 
-// Your current jobs (the dropdown). Seeded with recent jobs as placeholders, swap
-// for your live list. In the deployed version this loads from the master sheet's
-// "Jobs" tab so you maintain it in one place and Cowork matches folders to these names.
-// Fallback list (used only if the sheet's Jobs tab can't be reached). On load
-// the app fetches the live job names from the Apps Script and replaces this.
+// Your current jobs (the dropdown). Fallback list (used only if the sheet's
+// Jobs tab can't be reached). On load the app fetches the live job names from
+// the Apps Script and replaces this. Keep these matching the Jobs tab format.
 let JOBS = [
-  "27 Hill St (Madden Builders)",
-  "93 Hillcrest Rd, Tolmans Hill (Margot Jones)",
-  "Fort St (Southern Building)",
-  "Deck reseal (Rob)",
+  "Madden Builders - 27 Hill St, Bellerive",
+  "Channel Construction - 289 Sandy Bay Road, Sandy Bay",
+  "Margot Jones - 93 Hillcrest Road, Tolmans Hill",
+  "Terry Gunton - 447 Sandy Bay Road, Sandy Bay",
 ];
 
 const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
@@ -309,6 +327,24 @@ const FINISH_ORDER = {
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}
 function liveBackend(){return /^https?:\/\//.test(API_URL) && !API_URL.includes("PASTE_YOUR");}
 
+// Answers are stored as text in the sheet: "Yes", "No — reason", "N/A — reason".
+function packCell(o){
+  if(!o||!o.v)return "";
+  if(o.v==="yes")return "Yes";
+  if(o.v==="na")return "N/A — "+(o.note||"");
+  return "No — "+(o.note||"");
+}
+function parsePack(v){
+  if(v===true)return{v:"yes",note:""};
+  if(v===false||v==null||v==="")return{v:"no",note:""};
+  const s=String(v).trim();
+  if(/^(true|yes)$/i.test(s))return{v:"yes",note:""};
+  if(/^false$/i.test(s))return{v:"no",note:""};
+  if(/^n\/?a/i.test(s))return{v:"na",note:s.replace(/^n\/?a\s*[—–-]*\s*/i,"")};
+  if(/^no/i.test(s))return{v:"no",note:s.replace(/^no\s*[—–-]*\s*/i,"")};
+  return {v:"no",note:s};
+}
+
 // nested record (in-app) -> flat object whose keys match the Log headers
 function flattenRec(rec){
   const fl=rec.flags;
@@ -319,9 +355,9 @@ function flattenRec(rec){
     makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note,
     variation_hrs:fl.variation.hours, variation_note:fl.variation.note,
     holdup_note:fl.holdup.note, materials_note:fl.materials.note,
-    clean_neverhere:rec.pack.neverhere, clean_rubbish:rec.pack.rubbish,
-    clean_food:rec.pack.food, clean_masking:rec.pack.masking, clean_wiped:rec.pack.wiped,
-    gear_spray:rec.pack.spray, gear_secure:rec.pack.secure, gear_tidy:rec.pack.tidy, gear_dried:rec.pack.dried,
+    clean_neverhere:packCell(rec.pack.neverhere), clean_rubbish:packCell(rec.pack.rubbish),
+    clean_food:packCell(rec.pack.food), clean_masking:packCell(rec.pack.masking), clean_wiped:packCell(rec.pack.wiped),
+    gear_spray:packCell(rec.pack.spray), gear_secure:packCell(rec.pack.secure), gear_tidy:packCell(rec.pack.tidy), gear_dried:packCell(rec.pack.dried),
     notes:rec.notes
   };
 }
@@ -343,9 +379,9 @@ function rehydrateRow(r){
       materials:{on:!!t(r.materials_note), note:t(r.materials_note), hours:0}
     },
     pack:{
-      neverhere:b(r.clean_neverhere), rubbish:b(r.clean_rubbish), food:b(r.clean_food),
-      masking:b(r.clean_masking), wiped:b(r.clean_wiped),
-      spray:b(r.gear_spray), secure:b(r.gear_secure), tidy:b(r.gear_tidy), dried:b(r.gear_dried)
+      neverhere:parsePack(r.clean_neverhere), rubbish:parsePack(r.clean_rubbish), food:parsePack(r.clean_food),
+      masking:parsePack(r.clean_masking), wiped:parsePack(r.clean_wiped),
+      spray:parsePack(r.gear_spray), secure:parsePack(r.gear_secure), tidy:parsePack(r.gear_tidy), dried:parsePack(r.gear_dried)
     },
     notes:t(r.notes)
   };
@@ -412,6 +448,7 @@ function roleOf(name){const c=CREW.find(c=>c.name===name);return c?c.role:"Trade
 function num(x){const n=parseFloat(x);return isNaN(n)?0:n;}
 function jobOK(){return f.job&&f.job!==""&&(f.job!=="__other__"||f.jobOther.trim());}
 function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
+function packAnswered(p){const v=f.pack[p.key];return v==="yes"||((v==="no"||v==="na")&&f.packNotes[p.key].trim());}
 
 /* ====================== STATE ====================== */
 let view="crew", supDate=todayISO(), f=blankForm();
@@ -424,7 +461,8 @@ try{ if(window.localStorage && localStorage.getItem("tjp_sup_unlocked")==="1") s
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
-    pack:{neverhere:false,rubbish:false,food:false,masking:false,wiped:false,spray:false,secure:false,tidy:false,dried:false},
+    pack:{neverhere:null,rubbish:null,food:null,masking:null,wiped:null,spray:null,secure:null,tidy:null,dried:null},
+    packNotes:{neverhere:"",rubbish:"",food:"",masking:"",wiped:"",spray:"",secure:"",tidy:"",dried:""},
     notes:"",
     // apprentice "owner's way" reflection (only used/shown for apprentices)
     appr:{onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
@@ -467,9 +505,10 @@ function progress(){
   total++;if(f.worker)done++;
   total++;if(jobOK())done++;
   total++;if(f.workDone.trim())done++;
+  total++;if(f.jobUpdate.trim())done++;
   total++;if(Object.values(f.prep).some(Boolean))done++;
   FLAGS.forEach(fl=>{total++;const s=f.flags[fl.key];const ok=!s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));if(ok)done++;});
-  PACK_ALL.forEach(p=>{total++;if(f.pack[p.key])done++;});
+  PACK_ALL.forEach(p=>{total++;if(packAnswered(p))done++;});
   return Math.round(done/total*100);
 }
 
@@ -548,11 +587,13 @@ function crewForm(){
   fld.appendChild(chips);s.appendChild(fld);
   pad.appendChild(s);
 
-  // Job update for Taylor & Michael
-  s=sect("Job update for Taylor & Michael");
+  // Job update for Taylor & Michael — THE most important bit
+  s=sect("Job update — the most important bit");s.classList.add("jobupdate");
+  const co=el("div","jobupdate-callout","<b>This is what runs the schedule</b>Taylor & Michael plan tomorrow's crews and the rest of the week off this update. Tell them exactly where the job is at: what's finished, what's nearly finished, what's left, and anything that could change the timeline. Required — can't sign off without it.");
+  s.appendChild(co);
   fld=el("div","field");
-  const ju=el("textarea");ju.value=f.jobUpdate;ju.placeholder="Please update Taylor and Michael on where the tasks are up to — what's been finished, what's nearly finished?";
-  ju.oninput=e=>{f.jobUpdate=e.target.value;};fld.appendChild(ju);s.appendChild(fld);
+  const ju=el("textarea");ju.value=f.jobUpdate;ju.placeholder="Where's the job up to? Finished / nearly finished / still to go — and anything that shifts the timeline.";
+  ju.oninput=e=>{f.jobUpdate=e.target.value;updateProgress();updateSend();};fld.appendChild(ju);s.appendChild(fld);
   const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work <small style='color:#8A8F97'>(photos help the job update x10)</small>");
   ph.onclick=()=>{f.photos=!f.photos;render();};s.appendChild(ph);
   pad.appendChild(s);
@@ -592,20 +633,16 @@ function crewForm(){
   });
   pad.appendChild(s);
 
-  // Leave it clean (emphasised)
+  // Leave it clean (emphasised) — every question needs Yes / No / N/A.
+  // No and N/A need a note (why not / why it doesn't apply).
   s=sect("Leave it clean");
-  CLEAN.forEach(p=>{
-    const t=el("button","tick"+(p.primary?" primary":"")+(f.pack[p.key]?" on":""),"<span class='box'></span>"+p.t);
-    t.onclick=()=>{f.pack[p.key]=!f.pack[p.key];render();};s.appendChild(t);
-  });
+  s.appendChild(el("div","hint","Answer every one. No or N/A needs a quick note — e.g. droppies staying down because we're back tomorrow."));
+  CLEAN.forEach(p=>s.appendChild(packRow(p)));
   pad.appendChild(s);
 
   // Pack down
   s=sect("Gear");
-  GEAR.forEach(p=>{
-    const t=el("button","tick"+(f.pack[p.key]?" on":""),"<span class='box'></span>"+p.t);
-    t.onclick=()=>{f.pack[p.key]=!f.pack[p.key];render();};s.appendChild(t);
-  });
+  GEAR.forEach(p=>s.appendChild(packRow(p)));
   pad.appendChild(s);
 
   // Notes
@@ -617,11 +654,41 @@ function crewForm(){
   wrap.appendChild(pad);return wrap;
 }
 
+function packRow(p){
+  const v=f.pack[p.key];
+  const cls="qrow"+(p.primary?" primary":"")+(v==="yes"?" ans-yes":(v==="no"||v==="na")?" ans-note":"");
+  const box=el("div",cls);
+  box.appendChild(el("div","qt",p.t));
+  const opts=el("div","opts");
+  [["yes","Yes"],["no","No"],["na","N/A"]].forEach(([val,lbl])=>{
+    const b=el("button",val+(v===val?" on":""),lbl);
+    b.onclick=()=>{
+      f.pack[p.key]=(f.pack[p.key]===val?null:val);
+      render();
+      if(val!=="yes"&&f.pack[p.key]===val)setTimeout(()=>{const t=document.querySelector('[data-pn="'+p.key+'"]');if(t)t.focus();},40);
+    };
+    opts.appendChild(b);
+  });
+  box.appendChild(opts);
+  if(v==="no"||v==="na"){
+    const ta=el("textarea");ta.value=f.packNotes[p.key];ta.setAttribute("data-pn",p.key);
+    ta.placeholder=v==="no"?"Why not? What happened, and when will it be sorted?":"Why doesn't this apply today?";
+    ta.oninput=e=>{f.packNotes[p.key]=e.target.value;updateProgress();updateSend();};
+    box.appendChild(ta);
+  }
+  return box;
+}
+
 function sect(title){const s=el("div","sect");s.appendChild(el("p","eyebrow",title));return s;}
 function lab(t){return el("label","lab",t);}
 function updateProgress(){const fill=$(".coverage-fill");if(fill)fill.style.width=progress()+"%";}
 function updateSend(){const b=$(".send");if(b)b.disabled=!canSend();}
-function canSend(){return f.worker&&jobOK()&&FLAGS.every(fl=>{const s=f.flags[fl.key];return !s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));});}
+function canSend(){
+  return f.worker&&jobOK()
+    &&f.jobUpdate.trim()
+    &&FLAGS.every(fl=>{const s=f.flags[fl.key];return !s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));})
+    &&PACK_ALL.every(packAnswered);
+}
 
 function submitBar(){
   const bar=el("div","bar");const inner=el("div","bar-inner");
@@ -630,8 +697,11 @@ function submitBar(){
   let missing="Goes straight to Taylor with a timestamp";
   if(!f.worker)missing="Tap your name to start";
   else if(!jobOK())missing="Pick which job you were on";
+  else if(!f.jobUpdate.trim())missing="Add your job update — Taylor & Michael schedule off it";
   else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.extra&&!(num(s.hours)>0);}))missing="Add the hours on your flagged extras";
   else if(FLAGS.some(fl=>f.flags[fl.key].on&&!f.flags[fl.key].note.trim()))missing="Add a note to your flagged items";
+  else if(PACK_ALL.some(p=>!f.pack[p.key]))missing="Answer every clean-up & gear question — Yes, No or N/A";
+  else if(PACK_ALL.some(p=>{const v=f.pack[p.key];return(v==="no"||v==="na")&&!f.packNotes[p.key].trim();}))missing="Add a quick note on anything marked No or N/A";
   inner.appendChild(el("div","send-note",missing));
   bar.appendChild(inner);return bar;
 }
@@ -642,9 +712,10 @@ async function doSubmit(){
   const rec={date:todayISO(),ts:Date.now(),time:nowTime(),
     docket:"EOD-"+todayISO().replace(/-/g,"")+"-"+initials(f.worker),
     worker:f.worker,role:roleOf(f.worker),job:effectiveJob(),jobListed:f.job!=="__other__",
-    workDone:f.workDone.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
-    flags:{},pack:{...f.pack},notes:f.notes.trim()};
+    workDone:f.workDone.trim(),jobUpdate:f.jobUpdate.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
+    flags:{},pack:{},notes:f.notes.trim()};
   FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0};});
+  PACK_ALL.forEach(p=>{rec.pack[p.key]={v:f.pack[p.key],note:(f.packNotes[p.key]||"").trim()};});
   try{await saveSubmission(rec);}catch(e){}
   if(isAppr()){ try{await saveAppr(rec);}catch(e){} }
   showReceipt(rec);
@@ -706,7 +777,6 @@ async function renderSupervisor(app){
   const tally=el("div","tally");tally.id="tally";wrap.appendChild(tally);
   const ban=el("div");ban.id="banner";wrap.appendChild(ban);
   const list=el("div","sublist");list.id="sublist";list.appendChild(el("div","empty","Loading the day..."));wrap.appendChild(list);
-  wrap.appendChild(el("div","demo-note","Demo build. Submissions save to this artifact so the supervisor view works. In the deployed version they land in your sheet or database, and the daily text goes out automatically."));
   app.appendChild(wrap);
   const subs=await loadDay(supDate);
   paintSupervisor(subs);
@@ -772,11 +842,17 @@ function crewCard(s){
     r.appendChild(el("div","v",v.note||"(flagged, no note)"));
     body.appendChild(r);
   });
-  if(s.workDone){const r=el("div","row");r.appendChild(el("div","k","Tasks worked on"));r.appendChild(el("div","v",s.workDone));body.appendChild(r);}
   if(s.jobUpdate){const r=el("div","row");r.appendChild(el("div","k","Job update for Taylor & Michael"));r.appendChild(el("div","v",s.jobUpdate));body.appendChild(r);}
+  if(s.workDone){const r=el("div","row");r.appendChild(el("div","k","Tasks worked on"));r.appendChild(el("div","v",s.workDone));body.appendChild(r);}
   if(s.prep&&s.prep.length){const r=el("div","row");r.appendChild(el("div","k","Prep"));const pd=el("div","pd");s.prep.forEach(p=>pd.appendChild(el("span",null,p)));r.appendChild(pd);body.appendChild(r);}
   const r=el("div","row");r.appendChild(el("div","k","Clean-up & gear"));const pd=el("div","pd");
-  PACK_ALL.forEach(p=>{const done=s.pack[p.key];const label=p.key==="neverhere"?"Looked like we were never here":p.t;pd.appendChild(el("span",done?"":"miss",(done?"✓ ":"✗ ")+label));});
+  PACK_ALL.forEach(p=>{
+    const a=(s.pack&&s.pack[p.key])||{v:"no",note:""};
+    const label=p.key==="neverhere"?"Looked like we were never here":p.t;
+    const cls=a.v==="yes"?"":(a.v==="na"?"nax":"miss");
+    const sym=a.v==="yes"?"✓ ":(a.v==="na"?"N/A · ":"✗ ");
+    pd.appendChild(el("span",cls,sym+label+(a.note?" — "+a.note:"")));
+  });
   r.appendChild(pd);body.appendChild(r);
   const meta=el("div","row");meta.appendChild(el("div","k","Submitted"));meta.appendChild(el("div","v",s.time+(s.photos?"  ·  photos taken":"")+"  ·  "+s.docket));body.appendChild(meta);
   if(s.notes){const rn=el("div","row");rn.appendChild(el("div","k","Notes"));rn.appendChild(el("div","v",s.notes));body.appendChild(rn);}
