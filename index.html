@@ -198,6 +198,37 @@
   .guide li{font-size:14px;line-height:1.5;color:var(--ink-soft);margin-bottom:7px}
   .guide li:last-child{margin-bottom:0}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  /* photos on touch-ups / finishing surfaces */
+  .photostrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:-3px 2px 13px}
+  .cambtn{appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:9px;padding:8px 13px;min-height:38px;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink-soft)}
+  .cambtn:disabled{opacity:.6;cursor:default}
+  .photothumb{width:54px;height:54px;object-fit:cover;border-radius:8px;border:1.5px solid var(--line);cursor:pointer;background:#EEE}
+  .lightbox{position:fixed;inset:0;z-index:50;background:rgba(20,22,25,.92);display:flex;align-items:center;justify-content:center;padding:22px}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:10px}
+  .lightbox .lb-close{position:fixed;top:14px;right:20px;color:#fff;font-size:34px;line-height:1;font-family:sans-serif;cursor:pointer}
+  /* safety tab */
+  .safety-meta{background:var(--card);border:1.5px solid var(--line);border-radius:11px;padding:13px 14px;margin-bottom:14px}
+  .safety-meta .code{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-faint)}
+  .safety-meta .scope{font-size:14px;color:var(--ink-soft);margin-top:6px;line-height:1.45}
+  .hrcw{background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px;padding:12px 13px;margin-bottom:14px}
+  .hrcw h5{margin:0 0 7px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.03em;color:#7A4A12;text-transform:uppercase}
+  .hrcw ul{margin:0;padding-left:18px}.hrcw li{font-size:13.5px;color:#7A4A12;margin:3px 0;line-height:1.4}
+  .ppe-chips{display:flex;flex-wrap:wrap;gap:7px}
+  .ppe-chips span{background:#EEF1F3;border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:12.5px;color:var(--ink-soft)}
+  .saf-card{background:var(--card);border:1.5px solid var(--line);border-radius:11px;padding:12px 13px;margin-bottom:10px}
+  .saf-card .t{font-weight:700;font-size:15px;color:var(--ink);margin-bottom:2px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .saf-card .risk{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
+  .risk.High{background:#F7E0DA;color:#9B2D1F}.risk.Medium{background:var(--amber-soft);color:var(--amber)}.risk.Low{background:var(--green-soft);color:var(--green)}
+  .saf-card .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin:9px 0 3px}
+  .saf-card ul{margin:0;padding-left:17px}.saf-card li{font-size:13.5px;color:var(--ink);margin:2px 0;line-height:1.4}
+  .saf-card .who{font-size:12px;color:var(--ink-faint);margin-top:9px}
+  .saf-note{font-size:12px;color:var(--ink-faint);line-height:1.5;background:#F3EFE7;border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin:6px 0 14px}
+  .signon-who{display:flex;flex-wrap:wrap;gap:8px}
+  .signon-who button{appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:999px;padding:10px 15px 10px 13px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .signon-who button .tk{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;flex:none}
+  .signon-who button.on{background:var(--green-soft);border-color:var(--green-line);color:#13502F}
+  .signon-who button.on .tk{background:var(--green);border-color:var(--green)}
+  .signon-who button.on .tk::after{content:"";width:4px;height:8px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
 </style>
 
 <div id="app"></div>
@@ -210,6 +241,9 @@
 // change to go from demo to live. Leave it as-is and the app stays in demo
 // mode (saves to local artifact storage instead of your sheet).
 const API_URL = "https://script.google.com/macros/s/AKfycbzCBqpaFgreVPJnTmdeyiHSlTH2j3QRDDoulHj5HwNCFgS_hsTYMsAaGQ8biiW9xAp2tQ/exec";
+// Photo capture on touch-ups/finishing. Stays OFF until the Apps Script photo
+// handler is deployed — flip to true then and re-upload.
+const PHOTOS_ENABLED = false;
 
 // Your crew. Edit names/roles here, this is the only place they live.
 const CREW = [
@@ -450,10 +484,182 @@ function jobOK(){return f.job&&f.job!==""&&(f.job!=="__other__"||f.jobOther.trim
 function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 function packAnswered(p){const v=f.pack[p.key];return v==="yes"||((v==="no"||v==="na")&&f.packNotes[p.key].trim());}
 
+/* ======================================================================
+   TJP SAFETY CONTENT — single source of truth
+   Used by both the app's Safety tab and the standalone JSA/SWMS documents.
+   Jurisdiction: Tasmania — Work Health & Safety Act 2011 (Tas) & WHS
+   Regulations 2012 (Tas). SWMS is mandatory for High Risk Construction Work
+   (HRCW) per reg 291. These are TJP templates: review, make site-specific,
+   and have workers sign on before each job. Not a substitute for advice
+   from a competent WHS person.
+   ====================================================================== */
+const SAFETY_TYPES = [
+  "Interior Painting",
+  "Exterior Painting",
+  "Heritage Painting",
+  "Commercial Painting",
+  "Construction Site Painting"
+];
+
+const SAFETY = {
+  "Interior Painting": {
+    code: "TJP-01",
+    scope: "Preparation, priming, undercoating and finish coating of interior surfaces (walls, ceilings, doors, frames, trims) in occupied homes and new builds, by brush, roller and airless spray.",
+    ppe: ["Safety footwear","Safety glasses when sanding/spraying","P2 respirator for dust & vapours (A1P2 for solvent spray)","Nitrile gloves for solvents","Knee protection","Hearing protection with power tools"],
+    hrcw: [
+      "Risk of a fall of more than 2 m (stairwells, high ceilings, over stairs)",
+      "Work on or near energised electrical installations or services",
+      "Work in an area with a contaminated or flammable atmosphere / poorly ventilated space (solvent spraying)"
+    ],
+    jsa: [
+      {step:"Set up & access the work area", hazards:["Slips, trips over gear and leads","Manual handling of tins, gear and ladders"], controls:["Keep walkways and exits clear","Carry with a straight back, use a trolley for heavy tins/buckets","Run leads overhead or tape down","Spill kit and first-aid on site"]},
+      {step:"Surface prep — sanding & filling", hazards:["Dust inhalation (fillers may contain silica)","Eye irritation","Hand-arm vibration from power sanders"], controls:["Use dust-extracting sander with HEPA vacuum","Wet-sand or damp-wipe where practical","P2 respirator + safety glasses","Rotate tasks to limit vibration exposure"]},
+      {step:"Working at height — steps, platforms, trestles", hazards:["Fall from height (esp. stairwells / high ceilings)"], controls:["Use podium/platform steps in preference to ladders","Maintain 3 points of contact; no over-reaching (belt buckle within stiles)","Inspect ladders/platforms before use; tag out damaged gear","Second worker to foot ladders on hard floors"]},
+      {step:"Masking & protecting the room", hazards:["Knife/blade lacerations","Manual handling of furniture"], controls:["Cut away from the body with a sharp blade","Team-lift or slide furniture; don't lift beyond capacity","Drop sheets laid flat to avoid trips"]},
+      {step:"Priming, undercoating & cutting in", hazards:["Solvent vapours in enclosed rooms","Skin/eye contact with paint"], controls:["Use water-based products where possible","Ventilate — open windows, use fans, cross-flow","Nitrile gloves; wash before eating","SDS on file for every product in use"]},
+      {step:"Airless spray application", hazards:["High-pressure fluid injection injury","Atomised paint & solvent inhalation","Overspray to eyes/skin"], controls:["Never point the gun at anyone; engage trigger lock when not spraying","Keep the tip guard fitted; clear blockages only with the gun de-pressurised","A1P2 respirator + eye protection; maximise ventilation","Injection injury = medical emergency — seek treatment immediately, even if it looks minor"]},
+      {step:"Clean-up, waste & end of day", hazards:["Solvent handling & flammable rags","Slips from spills"], controls:["Dispose of waste per SDS; never tip solvents down drains or sinks","Solvent rags in a sealed metal container (spontaneous combustion risk)","Clean spills immediately; pack gear, coil leads, leave area tidy"]}
+    ],
+    swms: [
+      {task:"Access & housekeeping", hazards:["Slips/trips","Manual handling"], risk:"Medium", controls:["Clear access maintained","Mechanical aids/trolley for heavy loads","Team lifting for awkward items"], who:"All workers"},
+      {task:"Dust generation (sanding/filling)", hazards:["Respirable dust / possible silica","Eye injury"], risk:"Medium", controls:["On-tool dust extraction + HEPA vac","P2 respirator (fit-checked)","Safety glasses","Damp methods where practical"], who:"All workers"},
+      {task:"Working at height ≤ and > 2 m", hazards:["Fall from height"], risk:"High", controls:["Platform steps/mobile scaffold preferred over ladders","Ladders only for short-duration light work, footed/secured","Exclusion of the fall area; no work above others"], who:"Supervisor + All"},
+      {task:"Use of hazardous chemicals (solvent-based products)", hazards:["Inhalation of vapours","Skin absorption","Fire/flammability"], risk:"Medium", controls:["Substitute water-based where possible","Ventilation + A1P2 respirator for spray","No ignition sources; extinguisher on hand","SDS register maintained"], who:"All workers"},
+      {task:"Airless spraying", hazards:["Fluid injection injury","Inhalation of atomised paint"], risk:"High", controls:["Tip guard + trigger lock in place","De-pressurise before clearing tips","Respiratory protection; restrict area during spraying"], who:"Trained sprayer"},
+      {task:"Electrical — leads, power tools, near fittings", hazards:["Electric shock","Damaged leads"], risk:"Medium", controls:["Test-and-tag leads/tools; visual check before use","RCD protection","Isolate/avoid painting live fittings; cover switches"], who:"All workers"},
+      {task:"Working in occupied homes", hazards:["Public/occupant interaction","Trip hazards to others"], risk:"Low", controls:["Barricade/sign wet or work areas","Keep client walkways clear","Secure products away from children/pets"], who:"Supervisor"}
+    ]
+  },
+
+  "Exterior Painting": {
+    code: "TJP-02",
+    scope: "Preparation and coating of exterior surfaces (cladding, eaves, fascia, gutters, render, decks, fences) by brush, roller and spray, including work from ladders, scaffold and elevated work platforms.",
+    ppe: ["Safety footwear","Hi-vis where near traffic/plant","Sun protection (hat, sunscreen, long sleeves)","Safety glasses","P2 respirator for sanding/spray","Gloves","Harness where required on EWP/roof work"],
+    hrcw: [
+      "Risk of a fall of more than 2 m (ladders, scaffold, roofs, EWP)",
+      "Work on or near a road or in an area with traffic / powered mobile plant",
+      "Work on or near energised electrical installations or overhead power lines"
+    ],
+    jsa: [
+      {step:"Site & weather assessment", hazards:["Wind, heat, wet/slippery surfaces","UV exposure"], controls:["Don't work at height in high wind or rain","Plan for heat — water, shade, rotate crew","Sunscreen, hat, long sleeves"]},
+      {step:"Ladder & scaffold set-up", hazards:["Fall from height","Ladder slip / unstable ground"], controls:["Scaffold/EWP preferred over ladders for sustained work","Ladders on firm level ground at 4:1, footed or tied off","Inspect and tag scaffold; handrails and kick-boards fitted","Never stand on the top two rungs"]},
+      {step:"Overhead power lines & electrical", hazards:["Contact with power lines","Shock from meter boxes/fittings"], controls:["Identify power lines; keep gear and poles clear of exclusion zones","Contact network operator if working near lines","Do not paint over or into live electrical fittings"]},
+      {step:"Surface prep — scraping, sanding, washing", hazards:["Dust (assume lead on older homes)","Slips from wet surfaces","Chemical cleaners"], controls:["For pre-1997 homes treat as lead-painted — see Heritage SWMS controls","No dry power-sanding of old paint","Non-slip footwear; manage wash-down runoff","Follow SDS for sugar soap/cleaners; eye protection"]},
+      {step:"Working over/near ground hazards & public", hazards:["Falling objects onto people below","Public/pedestrians"], controls:["Exclusion zone and signage below work","Tools tethered / not left on edges","Barricade footpaths where needed"]},
+      {step:"Spray application (exterior)", hazards:["Overspray drift","Fluid injection","Inhalation"], controls:["Check wind — mask/relocate to protect people, cars, neighbours","Trigger lock + tip guard; de-pressurise to clear","A1P2 respirator, eye protection"]},
+      {step:"Pack down & clean-up", hazards:["Manual handling of scaffold/gear","Waste & runoff"], controls:["Team dismantle scaffold; don't drop components","Contain and dispose of waste/water per SDS and council rules","Leave site clean and safe overnight"]}
+    ],
+    swms: [
+      {task:"Weather & environment", hazards:["Wind at height","Heat/UV","Wet surfaces"], risk:"Medium", controls:["Stop height work in adverse weather","Heat management plan","Non-slip footwear"], who:"Supervisor"},
+      {task:"Working at height — ladders", hazards:["Fall from height"], risk:"High", controls:["Ladders industrial-rated, 4:1, footed/tied","Short-duration light work only","Three points of contact"], who:"All workers"},
+      {task:"Working at height — scaffold / EWP", hazards:["Fall","Overturn","Falling objects"], risk:"High", controls:["Erected/inspected by competent person; scaff tag current","EWP operated by licensed/trained user; harness where required","Toe-boards; exclusion zone below"], who:"Supervisor + trained operator"},
+      {task:"Overhead & fixed electrical", hazards:["Contact with power lines / live fittings"], risk:"High", controls:["Maintain exclusion zones from lines; consult network operator","Non-conductive poles where possible","No painting of energised fittings"], who:"Supervisor"},
+      {task:"Old paint / lead", hazards:["Lead dust exposure"], risk:"High", controls:["Assume lead pre-1997; wet methods, no dry sanding/blasting","Sheet and collect debris; P2/P3 respirator","See Heritage SWMS for full lead controls"], who:"All workers"},
+      {task:"Traffic & public interface", hazards:["Vehicles","Pedestrians","Falling objects"], risk:"Medium", controls:["Signage/barricades; hi-vis","Traffic control where on/near road","Keep footpaths clear or divert"], who:"Supervisor"},
+      {task:"Spraying outdoors", hazards:["Overspray drift","Injection injury"], risk:"High", controls:["Wind check; protect people/property/vehicles","Tip guard + trigger lock; de-pressurise to clear","Respiratory + eye protection"], who:"Trained sprayer"}
+    ]
+  },
+
+  "Heritage Painting": {
+    code: "TJP-03",
+    scope: "Restoration and repainting of heritage / older buildings (pre-1997 residential, pre-2010 commercial). Assumes lead-based paint and treats all disturbance as hazardous paint work under AS/NZS 4361.2.",
+    ppe: ["P2/P3 respirator to AS/NZS 1716 (fit-checked)","Disposable coveralls + overshoes","Nitrile gloves","Safety glasses/goggles","Safety footwear","Hi-vis where required"],
+    hrcw: [
+      "Work involving demolition/disturbance of hazardous paint (lead)",
+      "Risk of a fall of more than 2 m",
+      "Likely disturbance of asbestos (older eaves, sheeting, textures) — separate clearance required"
+    ],
+    jsa: [
+      {step:"Identify hazardous materials before starting", hazards:["Unknown lead / asbestos content"], controls:["Assume lead on any pre-1997 home / pre-2010 building unless tested clear","Test paint (lead swab/lab) and check for asbestos (eaves, sheeting, textured coatings)","If asbestos suspected, STOP — licensed removalist/assessor first"]},
+      {step:"Contain the work area", hazards:["Spread of lead dust/chips to soil, home, occupants"], controls:["Lay heavy plastic sheeting to catch all debris","Seal off area from occupants; keep children and pregnant women away","No eating, drinking or smoking in the work area"]},
+      {step:"Paint removal — the lead-safe way", hazards:["Airborne lead dust","Ingestion/inhalation of lead"], controls:["NO dry abrasive blasting, NO dry power sanding, NO open-flame burning","Use wet-scraping, chemical strippers or wet-sanding; or power tools with HEPA extraction","P3 respirator, coveralls, gloves; do not create visible dust"]},
+      {step:"Personal decontamination", hazards:["Carrying lead home on clothing/skin"], controls:["Remove coveralls/overshoes before leaving the area","Wash hands, face and forearms before breaks and end of day","Launder work clothing separately from family washing"]},
+      {step:"Waste collection & disposal", hazards:["Contaminated waste, dust, wash water"], controls:["Collect chips/dust/sheeting into sealed heavy-duty bags","Dispose as hazardous/lead waste per council & EPA Tasmania requirements","Contain and filter wash water; do not release to stormwater"]},
+      {step:"Priming, repair & finish coating", hazards:["Solvent vapours","Height access on older/fragile structures"], controls:["Seal remaining lead paint with an appropriate primer","Assess fragile balconies/verandahs/roofs before loading","Ventilation and respiratory protection as for interior/exterior"]},
+      {step:"Clearance & sign-off", hazards:["Residual contamination"], controls:["Visual clean-up; damp-wipe surfaces and remove all debris","Final check before handing area back","Record works and controls used"]}
+    ],
+    swms: [
+      {task:"Hazardous material identification", hazards:["Lead paint","Asbestos-containing materials"], risk:"High", controls:["Assume lead pre-1997; test where uncertain","Asbestos assessment before disturbance","Halt and escalate if ACM found"], who:"Supervisor"},
+      {task:"Containment & isolation", hazards:["Contamination of occupants/environment"], risk:"High", controls:["Plastic sheeting to capture debris","Exclusion of occupants/vulnerable persons","No eat/drink/smoke zone"], who:"Supervisor + All"},
+      {task:"Lead paint disturbance", hazards:["Airborne lead dust","Lead ingestion"], risk:"High", controls:["No dry sanding/blasting/heat-gun burning","Wet methods or HEPA-extracted tools","P3 respirator (AS/NZS 1716), coveralls, gloves"], who:"Trained workers only"},
+      {task:"Decontamination", hazards:["Take-home lead exposure"], risk:"High", controls:["Doff PPE in the work area","Wash before breaks / end of day","Separate laundering of work clothes"], who:"All workers"},
+      {task:"Waste management", hazards:["Hazardous lead waste","Contaminated water"], risk:"High", controls:["Double-bag and label lead waste","Dispose per council/EPA Tas","Contain wash water; no stormwater release"], who:"Supervisor"},
+      {task:"Health monitoring", hazards:["Cumulative lead exposure"], risk:"Medium", controls:["Blood lead level monitoring for workers doing regular lead work","Induction on lead risks","PCCP-accredited approach for lead work"], who:"Supervisor"},
+      {task:"Access on aged structures", hazards:["Fall through/off fragile heritage elements"], risk:"High", controls:["Assess load capacity of verandahs/roofs/balustrades","Independent scaffold rather than loading old structure","Fall protection > 2 m"], who:"Supervisor + All"}
+    ]
+  },
+
+  "Commercial Painting": {
+    code: "TJP-04",
+    scope: "Painting and coating of commercial and strata premises (offices, retail, common areas, car parks) often in occupied/operating buildings, with after-hours work, EWPs and coordination with building management and other trades.",
+    ppe: ["Safety footwear","Hi-vis","Safety glasses","P2 respirator for dust/spray","Gloves","Hearing protection","Harness on EWP where required"],
+    hrcw: [
+      "Risk of a fall of more than 2 m (EWP, scaffold, atriums, stairwells)",
+      "Work in or near a confined space (plant rooms, risers, tanks)",
+      "Work on or near energised electrical services",
+      "Work in an area with movement of powered mobile plant (car parks, loading docks)"
+    ],
+    jsa: [
+      {step:"Site induction & coordination", hazards:["Unfamiliar site rules","Clashing with other trades/public"], controls:["Complete building/site induction and sign in","Agree work zones and timing with building management","Coordinate a SWMS review where other trades share the area"]},
+      {step:"Public & occupant protection", hazards:["Slips/falls to public","Fumes in occupied areas"], controls:["Barricades, wet-floor and wet-paint signage","Program noisy/solvent work after hours where possible","Maintain clear egress and exit signage at all times"]},
+      {step:"Elevated work platforms & access", hazards:["Fall from height","EWP entrapment/overturn"], controls:["Only licensed/trained operators use EWPs","Pre-start EWP checks; harness where required","Ground assessed for load; spotter in busy areas"]},
+      {step:"Confined / restricted spaces (plant rooms, risers)", hazards:["Poor ventilation, atmosphere, entrapment"], controls:["Identify confined spaces — do not enter without a permit and controls","Atmospheric testing and standby person where required","Forced ventilation for coating in restricted spaces"]},
+      {step:"Electrical & services", hazards:["Live services, data/comms","Sprinkler heads"], controls:["Isolate/lock-out where working on/near services (competent person)","Do not paint sprinkler heads, detectors or exit signs","RCD-protected, tested-and-tagged leads/tools"]},
+      {step:"Car parks & loading areas", hazards:["Vehicles & powered mobile plant"], controls:["Hi-vis; establish exclusion zones and signage","Separate pedestrians from vehicle movements","Liaise with building management on access times"]},
+      {step:"Materials, spray & clean-up", hazards:["Solvent vapours in enclosed areas","Waste"], controls:["Ventilate; water-based where possible; A1P2 for spray","Contain overspray; protect finishes and equipment","Remove waste per building and council requirements"]}
+    ],
+    swms: [
+      {task:"Induction & permits", hazards:["Non-compliance with site rules"], risk:"Medium", controls:["Site induction complete; sign-in","Permits obtained (hot work/confined space/EWP as needed)","Daily coordination with building management"], who:"Supervisor"},
+      {task:"Working at height / EWP", hazards:["Fall","Overturn"], risk:"High", controls:["Licensed operator; pre-start checks","Harness/restraint where required","Exclusion zone below"], who:"Trained operator"},
+      {task:"Confined / restricted spaces", hazards:["Hazardous atmosphere","Entrapment"], risk:"High", controls:["Confined space permit + atmospheric testing","Standby person + rescue plan","Forced ventilation"], who:"Supervisor"},
+      {task:"Energised electrical services", hazards:["Shock","Painting critical fittings"], risk:"High", controls:["Isolation/LOTO by competent person","No painting of sprinklers/detectors/exit signs","Test-and-tag + RCD"], who:"Supervisor"},
+      {task:"Powered mobile plant (car parks/docks)", hazards:["Struck by vehicle/plant"], risk:"High", controls:["Exclusion zones + signage","Separate pedestrian routes","Hi-vis; spotter where needed"], who:"Supervisor + All"},
+      {task:"Occupied-building work", hazards:["Public slips","Fume exposure to occupants"], risk:"Medium", controls:["Barricades + signage; maintain egress","After-hours for solvent/noisy work","Ventilation of occupied areas"], who:"Supervisor"},
+      {task:"Hazardous chemicals & spray", hazards:["Vapour inhalation","Fire"], risk:"Medium", controls:["Water-based substitution; A1P2 respirator","SDS register; no ignition sources","Overspray containment"], who:"All workers"}
+    ]
+  },
+
+  "Construction Site Painting": {
+    code: "TJP-05",
+    scope: "Painting and coating on active construction sites and new builds, working under a principal contractor alongside other trades, with mandatory SWMS, site inductions, scaffolding and shared high-risk environments.",
+    ppe: ["Safety footwear (lace-up, protective)","Hi-vis (long sleeve where required)","Hard hat where mandated","Safety glasses","P2 respirator for dust/spray","Gloves","Hearing protection"],
+    hrcw: [
+      "Risk of a fall of more than 2 m (scaffold, voids, edges, stairwells)",
+      "Work in an area with movement of powered mobile plant (cranes, telehandlers, forklifts)",
+      "Work in or near a confined space",
+      "Work on or near energised electrical installations or services",
+      "Work in an area that may have a contaminated or flammable atmosphere"
+    ],
+    jsa: [
+      {step:"Site induction & sign-on", hazards:["Unknown site hazards & rules"], controls:["Complete principal contractor's induction before starting","Provide this SWMS and sign workers onto it","Know site emergency, first-aid and assembly points"]},
+      {step:"Access, scaffold & edges", hazards:["Falls from scaffold, voids, floor edges, penetrations"], controls:["Use handed-over scaffold with current scaff tag only","Never remove edge protection, covers or handrails — report to site super","Cover/flag penetrations; fall protection > 2 m"]},
+      {step:"Working around other trades & plant", hazards:["Struck by mobile plant","Overhead work by others","Noise"], controls:["Stay clear of exclusion zones and crane/telehandler paths","Coordinate so no work directly above/below others","Hearing protection near cutting/fixing"]},
+      {step:"Housekeeping & access ways", hazards:["Slips/trips over materials, leads, debris"], controls:["Keep access ways and stairs clear","Manage leads and hoses off walkways","Clean as you go; bin off-cuts and packaging"]},
+      {step:"Hazardous substances & atmosphere", hazards:["Solvent vapours in unventilated new rooms","Dust from multiple trades"], controls:["Ventilate; water-based where possible; A1P2 for spray","P2 respirator for combined dust; SDS register on site","No ignition sources near solvents/flammables"]},
+      {step:"Electrical & temporary power", hazards:["Shock from site power / damaged leads"], controls:["Use RCD-protected site power; test-and-tag leads/tools","Keep leads out of water and off traffic paths","Report damaged temporary electrical to site super"]},
+      {step:"Spray application on site", hazards:["Overspray to other trades/finishes","Injection injury"], controls:["Notify adjacent trades; mask and isolate the spray zone","Trigger lock + tip guard; de-pressurise to clear","Respiratory + eye protection"]}
+    ],
+    swms: [
+      {task:"Induction, sign-on & coordination", hazards:["Unmanaged site interfaces"], risk:"Medium", controls:["Principal contractor induction complete","Workers signed onto this SWMS","Daily pre-start / coordination with site super"], who:"Supervisor"},
+      {task:"Falls — scaffold, edges, voids", hazards:["Fall from height / into voids"], risk:"High", controls:["Scaff-tagged scaffold only; no unauthorised alterations","Edge protection & penetration covers maintained","Harness/anchor where edge protection absent"], who:"Supervisor + All"},
+      {task:"Powered mobile plant interaction", hazards:["Struck by cranes/telehandlers/forklifts"], risk:"High", controls:["Keep clear of plant exclusion zones and lift areas","Spotters/traffic management per site plan","Hi-vis at all times"], who:"All workers"},
+      {task:"Confined / poorly ventilated spaces", hazards:["Hazardous atmosphere"], risk:"High", controls:["Permit + testing before entry","Forced ventilation for coating","Standby person + rescue plan"], who:"Supervisor"},
+      {task:"Electrical — temporary site power", hazards:["Electric shock"], risk:"High", controls:["RCD protection on all site power","Test-and-tag; visual check before use","Report/replace damaged leads"], who:"All workers"},
+      {task:"Hazardous chemicals & flammables", hazards:["Vapour inhalation","Fire/explosion"], risk:"Medium", controls:["Substitute water-based; A1P2 respirator for spray","No ignition sources; store flammables correctly","SDS register on site"], who:"All workers"},
+      {task:"Housekeeping & shared access", hazards:["Slips/trips","Falling objects"], risk:"Medium", controls:["Clear access ways and stairs","Manage leads/hoses","No materials left on edges/scaffold"], who:"All workers"}
+    ]
+  }
+};
+
 /* ====================== STATE ====================== */
 let view="crew", supDate=todayISO(), f=blankForm();
 // Touch-up view state
 let touchJob="", touchPerson=null, touchData=[], pendingFinish=null, otherSup="", otherSupName="", tuAddText="", tuLoading=false, showOrder=false;
+// Photo attach/display state (Finishing tab)
+let lightbox=null; const uploading={};
+// Safety tab state
+let safetyJob="", safetyType="", safetyData=[], safetyLoading=false;
+let safetyDoc="jsa", safetyNoteSaving=false;
 // Supervisor tab PIN lock — unlocked state is remembered per device via localStorage
 // so Brydon/Michael/you only need to enter it once on your own phone.
 let supUnlocked=false, supPinTry="", supPinErr="";
@@ -475,7 +681,9 @@ function render(){
   app.appendChild(header());
   if(view==="crew"){app.appendChild(coverage());app.appendChild(crewForm());app.appendChild(submitBar());}
   else if(view==="touch"){renderTouch(app);}
+  else if(view==="safety"){renderSafety(app);}
   else renderSupervisor(app);
+  if(lightbox) app.appendChild(lightboxEl());
 }
 
 function header(){
@@ -488,14 +696,17 @@ function header(){
     ? "<b>EOD-"+todayISO().replace(/-/g,"")+(f.worker?("-"+initials(f.worker)):"")+"</b><br>"+prettyDate(todayISO())
     : view==="touch"
     ? "<b>FINISHING STAGES</b><br>"+(touchJob?touchJob:"Pick a job")
+    : view==="safety"
+    ? "<b>SAFETY — JSA / SWMS</b><br>"+(safetyJob?safetyJob:"Pick a job")
     : "<b>SUPERVISOR</b><br>"+prettyDate(supDate);
   top.appendChild(dk); band.appendChild(top);
   const tg=el("div","toggle");
   const b1=el("button",view==="crew"?"on":"","Crew");
   const b2=el("button",view==="super"?"on":"","Supervisor");
   const b3=el("button",view==="touch"?"on":"","Finishing");
-  b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();}; b3.onclick=()=>{view="touch";render();};
-  tg.appendChild(b1);tg.appendChild(b2);tg.appendChild(b3); band.appendChild(tg);
+  const b4=el("button",view==="safety"?"on":"","Safety");
+  b1.onclick=()=>{view="crew";render();}; b2.onclick=()=>{view="super";render();}; b3.onclick=()=>{view="touch";render();}; b4.onclick=()=>{view="safety";render();};
+  tg.appendChild(b1);tg.appendChild(b2);tg.appendChild(b3);tg.appendChild(b4); band.appendChild(tg);
   wrap.appendChild(band); return wrap;
 }
 
@@ -891,6 +1102,84 @@ async function setFinish(stage,done,sup){
   await tuSet({job:touchJob,type:"finish",item:stage,done:done,done_by:touchPerson||"",supervisor:sup});
 }
 
+/* ---- Photos on touch-ups & finishing surfaces ---- */
+function lightboxEl(){
+  const o=el("div","lightbox");
+  const img=el("img");img.src=lightbox;o.appendChild(img);
+  o.appendChild(el("div","lb-close","×"));
+  o.onclick=()=>{lightbox=null;render();};
+  return o;
+}
+// Downscale + compress a chosen photo to a JPEG data URL so uploads stay small.
+function fileToDataUrl(file,maxDim,quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      let w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+      const scale=Math.min(1,maxDim/Math.max(w,h));
+      w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));
+      const cv=document.createElement("canvas");cv.width=w;cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      try{resolve(cv.toDataURL("image/jpeg",quality));}catch(e){reject(e);}
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("bad image"));};
+    img.src=url;
+  });
+}
+// Send a photo to the backend, which stores it in Drive and returns a view URL.
+async function tuPhoto(job,type,item,by,dataUrl){
+  if(!liveBackend())return null;
+  try{
+    const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify({action:"photo",job:job,type:type,item:item,by:by,dataUrl:dataUrl})});
+    const d=await r.json();
+    return (d&&d.url)?d.url:null;
+  }catch(e){return null;}
+}
+// Open the camera / photo picker for one touch-up or finishing item.
+function pickPhoto(type,item){
+  const key=type+"|"+item;
+  const inp=document.createElement("input");
+  inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
+  inp.onchange=async()=>{
+    const file=inp.files&&inp.files[0];if(!file)return;
+    uploading[key]=true;render();
+    let ok=false;
+    try{
+      const dataUrl=await fileToDataUrl(file,1280,0.72);
+      const url=await tuPhoto(touchJob,type,item,touchPerson||"",dataUrl);
+      if(url){
+        let row=touchData.find(x=>x.type===type&&x.item===item);
+        if(!row){row={job:touchJob,type:type,item:item,done:false,done_by:"",done_at:"",supervisor:"",photo:""};touchData.push(row);}
+        row.photo=url;ok=true;
+      }
+    }catch(e){}
+    delete uploading[key];render();
+    if(!ok)alert("Photo didn't upload — check signal and try again.");
+  };
+  inp.click();
+}
+// The little "Add photo" button + thumbnail shown under each item.
+function photoStrip(type,item,label){
+  if(!PHOTOS_ENABLED) return el("span");
+  const noun=label||"photo";
+  const key=type+"|"+item;
+  const row=touchData.find(x=>x.type===type&&x.item===item);
+  const d=el("div","photostrip");
+  if(row&&row.photo){
+    const th=el("img","photothumb");th.src=row.photo;th.alt=noun;
+    th.onclick=()=>{lightbox=row.photo;render();};
+    d.appendChild(th);
+  }
+  const busy=!!uploading[key];
+  const cam=el("button","cambtn",busy?"⏳ Uploading…":((row&&row.photo)?("📷 Replace "+noun):("📷 Add "+noun)));
+  if(busy)cam.disabled=true;
+  cam.onclick=()=>pickPhoto(type,item);
+  d.appendChild(cam);
+  return d;
+}
+
 function renderTouch(app){
   const wrap=el("div","wrap");const pad=el("div","pad");
   // Job picker
@@ -937,6 +1226,7 @@ function renderTouch(app){
     const t=el("button","tick primary"+(done?" on":""),"<span class='box'></span>"+stage+(done&&row.supervisor?" <small style='color:#13502F;font-weight:600'>✓ "+escapeHtml(row.supervisor)+"</small>":""));
     t.onclick=()=>{ if(done){setFinish(stage,false,"");} else {pendingFinish=stage;otherSup="";render();} };
     s.appendChild(t);
+    s.appendChild(photoStrip("finish",stage));
     if(pendingFinish===stage){
       const sign=el("div","callout");sign.style.display="block";
       sign.appendChild(el("div",null,"<b>Signed off by which supervisor?</b>"));
@@ -961,11 +1251,170 @@ function renderTouch(app){
   items.forEach(it=>{
     const t=el("button","tick"+(it.done?" on":""),"<span class='box'></span>"+escapeHtml(it.item)+(it.done&&it.done_by?" <small style='color:#8A8F97'>· "+escapeHtml(it.done_by)+"</small>":""));
     t.onclick=()=>toggleTouch(it);s.appendChild(t);
+    if(it.done) s.appendChild(photoStrip("touchup",it.item,"after photo"));
   });
   const addWrap=el("div","field");addWrap.style.marginTop="10px";
   const ai=el("input");ai.type="text";ai.placeholder="Add a touch-up you spotted...";ai.value=tuAddText;ai.oninput=e=>{tuAddText=e.target.value;};
   const ab=el("button","chip","+ Add");ab.style.marginTop="8px";ab.onclick=()=>addTouch();
   addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
+
+  wrap.appendChild(pad);app.appendChild(wrap);
+}
+
+/* ====================== SAFETY (JSA / SWMS) ====================== */
+// Sign-ons are stored through the existing touch-up backend as type "signon"
+// (item encodes work type + worker), so no backend change is needed.
+async function loadSafety(){
+  if(!safetyJob){safetyData=[];render();return;}
+  safetyLoading=true;render();
+  const all=await tuLoad(safetyJob);
+  safetyData=(all||[]).filter(x=>x.type==="signon"||x.type==="safetynote");
+  safetyLoading=false;render();
+}
+function isDone(v){return v===true||v==="TRUE"||v==="true"||v===1||v==="1";}
+function signedOn(worktype,name){
+  const item=worktype+" :: "+name;
+  return safetyData.some(x=>x.type==="signon"&&x.item===item&&isDone(x.done));
+}
+async function toggleSignon(worktype,name){
+  const item=worktype+" :: "+name;
+  let row=safetyData.find(x=>x.type==="signon"&&x.item===item);
+  const nowOn=!(row&&isDone(row.done));
+  if(!row){row={job:safetyJob,type:"signon",item:item,done:false,done_by:name,done_at:"",supervisor:""};safetyData.push(row);}
+  row.done=nowOn;row.done_by=name;
+  render();
+  await tuSet({job:safetyJob,type:"signon",item:item,done:nowOn,done_by:name});
+}
+async function saveSafetyNote(key,text){
+  let row=safetyData.find(x=>x.type==="safetynote"&&x.item===key);
+  if(!row){row={job:safetyJob,type:"safetynote",item:key,done:true,done_by:"",done_at:"",supervisor:text};safetyData.push(row);}
+  row.supervisor=text;
+  safetyNoteSaving=true;render();
+  await tuSet({job:safetyJob,type:"safetynote",item:key,done:true,done_by:"",supervisor:text});
+  safetyNoteSaving=false;render();
+}
+
+function renderSafety(app){
+  const wrap=el("div","wrap");const pad=el("div","pad");
+  // Job picker
+  let s=sect("Which job?");
+  let fld=el("div","field");
+  const jsel=el("select");
+  jsel.appendChild(new Option("Pick a job...",""));
+  JOBS.forEach(j=>{const o=new Option(j,j);if(safetyJob===j)o.selected=true;jsel.appendChild(o);});
+  jsel.onchange=e=>{safetyJob=e.target.value;loadSafety();};
+  fld.appendChild(jsel);s.appendChild(fld);pad.appendChild(s);
+
+  if(!safetyJob){
+    pad.appendChild(el("div","empty","Pick a job to view its safety docs and sign on."));
+    wrap.appendChild(pad);app.appendChild(wrap);return;
+  }
+
+  // Work-type picker
+  const wt=safetyType||SAFETY_TYPES[0];
+  s=sect("Type of work");
+  fld=el("div","field");
+  const tsel=el("select");
+  SAFETY_TYPES.forEach(tp=>{const o=new Option(tp,tp);if(wt===tp)o.selected=true;tsel.appendChild(o);});
+  tsel.onchange=e=>{safetyType=e.target.value;render();};
+  fld.appendChild(tsel);s.appendChild(fld);pad.appendChild(s);
+
+  // JSA vs SWMS picker
+  s=sect("View");
+  fld=el("div","field");
+  const dsel=el("select");
+  [["jsa","JSA — Job Safety Analysis"],["swms","SWMS — Safe Work Method Statement"]].forEach(pair=>{const o=new Option(pair[1],pair[0]);if(safetyDoc===pair[0])o.selected=true;dsel.appendChild(o);});
+  dsel.onchange=e=>{safetyDoc=e.target.value;render();};
+  fld.appendChild(dsel);s.appendChild(fld);pad.appendChild(s);
+
+  const doc=SAFETY[wt]; if(!doc){wrap.appendChild(pad);app.appendChild(wrap);return;}
+  const isSwms=(safetyDoc==="swms");
+
+  // Meta
+  const meta=el("div","safety-meta");
+  meta.appendChild(el("div","code",escapeHtml(doc.code)+" · "+escapeHtml(wt)));
+  meta.appendChild(el("div","scope",escapeHtml(doc.scope)));
+  pad.appendChild(meta);
+
+  // High-risk construction work (SWMS view only)
+  if(isSwms&&doc.hrcw&&doc.hrcw.length){
+    const h=el("div","hrcw");
+    h.appendChild(el("h5",null,"High-risk construction work — SWMS required"));
+    const ul=el("ul");doc.hrcw.forEach(x=>ul.appendChild(el("li",null,escapeHtml(x))));
+    h.appendChild(ul);pad.appendChild(h);
+  }
+
+  // PPE
+  s=sect("PPE required");
+  const chips=el("div","ppe-chips");doc.ppe.forEach(p=>chips.appendChild(el("span",null,escapeHtml(p))));
+  s.appendChild(chips);pad.appendChild(s);
+
+  // JSA (JSA view only)
+  if(!isSwms){
+  s=sect("JSA — steps, hazards & controls");
+  doc.jsa.forEach((r,i)=>{
+    const c=el("div","saf-card");
+    c.appendChild(el("div","t","<span>"+(i+1)+". "+escapeHtml(r.step)+"</span>"));
+    c.appendChild(el("div","lbl","Hazards"));
+    let ul=el("ul");r.hazards.forEach(x=>ul.appendChild(el("li",null,escapeHtml(x))));c.appendChild(ul);
+    c.appendChild(el("div","lbl","Controls"));
+    ul=el("ul");r.controls.forEach(x=>ul.appendChild(el("li",null,escapeHtml(x))));c.appendChild(ul);
+    s.appendChild(c);
+  });
+  pad.appendChild(s);
+  }
+
+  // SWMS (SWMS view only)
+  if(isSwms){
+  s=sect("SWMS — activities & control measures");
+  doc.swms.forEach(r=>{
+    const c=el("div","saf-card");
+    c.appendChild(el("div","t","<span>"+escapeHtml(r.task)+"</span><span class='risk "+r.risk+"'>"+escapeHtml(r.risk)+"</span>"));
+    c.appendChild(el("div","lbl","Hazards"));
+    let ul=el("ul");r.hazards.forEach(x=>ul.appendChild(el("li",null,escapeHtml(x))));c.appendChild(ul);
+    c.appendChild(el("div","lbl","Control measures"));
+    ul=el("ul");r.controls.forEach(x=>ul.appendChild(el("li",null,escapeHtml(x))));c.appendChild(ul);
+    c.appendChild(el("div","who","Responsible: "+escapeHtml(r.who)));
+    s.appendChild(c);
+  });
+  pad.appendChild(s);
+  }
+
+  pad.appendChild(el("div","saf-note","This is a TJP template SWMS/JSA. Before work starts, check it covers the actual site conditions, add anything specific to this job, and make sure every worker has signed on below. Keep it on site and review it if the work or conditions change."));
+
+  // Notes (per job + work type + JSA/SWMS)
+  {
+    const nkey=wt+" :: "+safetyDoc+" :: notes";
+    const nrow=safetyData.find(x=>x.type==="safetynote"&&x.item===nkey);
+    const saved=nrow?(nrow.supervisor||nrow.note||""):"";
+    const sn=sect("Notes for this job");
+    const nf=el("div","field");
+    const ta=el("textarea");ta.value=saved;ta.placeholder="Site-specific notes — extra hazards, controls, access, who to call...";
+    nf.appendChild(ta);
+    const sb=el("button","chip",safetyNoteSaving?"Saving…":"Save note");if(safetyNoteSaving)sb.disabled=true;sb.style.marginTop="8px";
+    sb.onclick=()=>saveSafetyNote(nkey,ta.value);
+    nf.appendChild(sb);
+    if(nrow&&saved)nf.appendChild(el("div","hint","Saved to the job — visible to Taylor."));
+    sn.appendChild(nf);pad.appendChild(sn);
+  }
+
+  // Sign-on
+  s=sect("Sign on — "+wt);
+  if(safetyLoading){s.appendChild(el("div","empty","Loading sign-ons..."));}
+  else{
+    s.appendChild(el("div","hint","Tap your name to confirm you've read and understood the JSA & SWMS for this job. Tap again to remove."));
+    const who=el("div","signon-who");
+    CREW.forEach(c=>{
+      const on=signedOn(wt,c.name);
+      const b=el("button",on?"on":"","<span class='tk'></span>"+escapeHtml(c.name));
+      b.onclick=()=>toggleSignon(wt,c.name);
+      who.appendChild(b);
+    });
+    s.appendChild(who);
+    const n=CREW.filter(c=>signedOn(wt,c.name)).length;
+    s.appendChild(el("div","hint",n+" of "+CREW.length+" signed on for this work type."));
+  }
+  pad.appendChild(s);
 
   wrap.appendChild(pad);app.appendChild(wrap);
 }
