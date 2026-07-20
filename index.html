@@ -263,10 +263,16 @@ const ORDER_CUTOFF_MIN = 15*60 + 45; // 3:45pm
 // Jobs tab can't be reached). On load the app fetches the live job names from
 // the Apps Script and replaces this. Keep these matching the Jobs tab format.
 let JOBS = [
+  "Ari Pafitis - 45 Crooked Billet Drive, Bridgewater",
+  "Barbara Beckett - 289 Sandy Bay Road, Sandy Bay",
   "Madden Builders - 27 Hill St, Bellerive",
-  "Channel Construction - 289 Sandy Bay Road, Sandy Bay",
+  "Madden Builders - 39 Silwood Ave, Howrah",
+  "Madden Builders - 60 View St, Sandy Bay",
   "Margot Jones - 93 Hillcrest Road, Tolmans Hill",
+  "Southern Building - 11 Fort St, Bellerive",
+  "Strata Complete - Lynn Stratton - 13 Beechworth Road, Sandy Bay",
   "Terry Gunton - 447 Sandy Bay Road, Sandy Bay",
+  "Trent Stevens - 42 Faraday St, West Hobart",
 ];
 
 const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
@@ -1424,12 +1430,17 @@ function renderSafety(app){
 // the Jobs column). Falls back to the hardcoded JOBS above if the fetch fails.
 async function loadJobs(){
   if(!liveBackend())return;
-  try{
-    const res=await fetch(API_URL);
-    const arr=await res.json();
-    if(Array.isArray(arr)&&arr.length)JOBS=arr;
-  }catch(e){}
+  // Apps Script can cold-start and fail the first hit; retry so the full
+  // list reliably loads instead of falling back to the built-in list.
+  for(var attempt=0; attempt<4; attempt++){
+    try{
+      const res=await fetch(API_URL,{cache:"no-store"});
+      const arr=await res.json();
+      if(Array.isArray(arr)&&arr.length){JOBS=arr;return;}
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+  }
 }
 render();
-loadJobs().then(()=>{ if(view==="crew"&&!f.worker)render(); });
+loadJobs().then(()=>{ if((view==="crew"&&!f.worker)||(view==="touch"&&!touchJob)||(view==="safety"&&!safetyJob)) render(); });
 </script>
