@@ -281,21 +281,20 @@ const FLAGS = [
   {key:"makegood", extra:true,    q:"Any extra trade damage we had to fix?", sub:"Fixing damage or patching beyond the quote. What and where?"},
   {key:"variation", extra:true,   q:"Extra work or changes asked for on site?",        sub:"Who asked (builder/client) and what they wanted."},
   {key:"holdup",                  q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable."},
-  {key:"materials", delivery:true,q:"Checked paint & stock levels, anything low?",     sub:"Paint, tints, consumables. Custom tints especially, they're slow."},
+  {key:"materials", delivery:true,q:"Need to order any paint or materials for tomorrow?", sub:"Paint, tints, consumables — flag anything low. Custom tints especially, they're slow."},
 ];
 
 const CLEAN = [
-  {key:"neverhere", t:"Does it look like we were never here?", primary:true},
-  {key:"rubbish",   t:"Rubbish & waste removed"},
-  {key:"food",      t:"All our food scraps & rubbish cleared"},
+  {key:"neverhere", t:"Site left like we were never here", primary:true},
+  {key:"rubbish",   t:"All our TJP rubbish & waste taken away"},
+  {key:"food",      t:"Food scraps & wrappers gone"},
   {key:"masking",   t:"Masking, drop sheets & tape pulled up"},
-  {key:"wiped",     t:"Floors & surfaces wiped, no drips or overspray"},
+  {key:"wiped",     t:"Floors & surfaces wiped — no drips or overspray"},
 ];
 const GEAR = [
-  {key:"spray",  t:"Spray gear flushed & cleaned"},
-  {key:"secure", t:"Tools & gear secured / locked up"},
-  {key:"tidy",   t:"All gear stacked in a tidy line, neat for next day"},
-  {key:"dried",  t:"Has all paint been wiped away and trays and pots allowed to dry for the next day?"},
+  {key:"secure", t:"Tools & gear locked away"},
+  {key:"tidy",   t:"Gear stacked tidy, ready for tomorrow"},
+  {key:"dried",  t:"Paint cleaned off, trays & pots left to dry"},
 ];
 const PACK_ALL = [...CLEAN,...GEAR];
 
@@ -397,7 +396,8 @@ function flattenRec(rec){
     holdup_note:fl.holdup.note, materials_note:fl.materials.note,
     clean_neverhere:packCell(rec.pack.neverhere), clean_rubbish:packCell(rec.pack.rubbish),
     clean_food:packCell(rec.pack.food), clean_masking:packCell(rec.pack.masking), clean_wiped:packCell(rec.pack.wiped),
-    gear_spray:packCell(rec.pack.spray), gear_secure:packCell(rec.pack.secure), gear_tidy:packCell(rec.pack.tidy), gear_dried:packCell(rec.pack.dried),
+    gear_secure:packCell(rec.pack.secure), gear_tidy:packCell(rec.pack.tidy), gear_dried:packCell(rec.pack.dried),
+    materials_checked:(rec.paint&&rec.paint.checked==="yes"?"Yes":(rec.paint&&rec.paint.checked==="no"?"No":"")),
     notes:rec.notes
   };
 }
@@ -488,7 +488,7 @@ function roleOf(name){const c=CREW.find(c=>c.name===name);return c?c.role:"Trade
 function num(x){const n=parseFloat(x);return isNaN(n)?0:n;}
 function jobOK(){return f.job&&f.job!==""&&(f.job!=="__other__"||f.jobOther.trim());}
 function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
-function packAnswered(p){const v=f.pack[p.key];return v==="yes"||((v==="no"||v==="na")&&f.packNotes[p.key].trim());}
+function packAnswered(p){const v=f.pack[p.key];return v==="yes"||(v==="no"&&f.packNotes[p.key].trim());}
 
 /* ======================================================================
    TJP SAFETY CONTENT — single source of truth
@@ -673,9 +673,10 @@ try{ if(window.localStorage && localStorage.getItem("tjp_sup_unlocked")==="1") s
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,
     flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
-    pack:{neverhere:null,rubbish:null,food:null,masking:null,wiped:null,spray:null,secure:null,tidy:null,dried:null},
-    packNotes:{neverhere:"",rubbish:"",food:"",masking:"",wiped:"",spray:"",secure:"",tidy:"",dried:""},
+    pack:{neverhere:null,rubbish:null,food:null,masking:null,wiped:null,secure:null,tidy:null,dried:null},
+    packNotes:{neverhere:"",rubbish:"",food:"",masking:"",wiped:"",secure:"",tidy:"",dried:""},
     notes:"",
+    paint:{checked:null},
     // apprentice "owner's way" reflection (only used/shown for apprentices)
     appr:{onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
 }
@@ -817,43 +818,28 @@ function crewForm(){
 
   // Flag to Taylor
   s=sect("Flag to Taylor");
-  FLAGS.forEach(fl=>{
-    const state=f.flags[fl.key];
-    const box=el("div","flag "+(state.on?"on":"off"));
-    const head=el("button","flag-head");
-    head.innerHTML="<span class='flag-q'><b>"+fl.q+"</b><span>"+fl.sub+"</span></span><span class='yn'><i class='n'>No</i><i class='y'>Yes</i></span>";
-    head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";}render();
-      if(state.on)setTimeout(()=>{const t=document.querySelector('[data-focus="'+fl.key+'"]');if(t)t.focus();},40);};
-    box.appendChild(head);
-    const body=el("div","flag-body");
-    if(fl.delivery){
-      const before=nowMin()<ORDER_CUTOFF_MIN;
-      const co=el("div","callout"+(before?"":" late"));
-      co.innerHTML="<span class='clk'>"+(before?"🕒":"📦")+"</span><span>"+(before
-        ?"Get the order in <b>before 3:45</b> and it'll be delivered. You've still got time."
-        :"It's <b>past 3:45</b> now, so flag it here and it'll go on the next order.")+"</span>";
-      body.appendChild(co);
-    }
-    if(fl.extra){
-      const hf=el("div","hoursfield");
-      hf.appendChild(el("label",null,"Hours on this extra"));
-      const inp=el("div","inp");
-      const h=el("input");h.type="number";h.min="0";h.step="0.25";h.inputMode="decimal";h.value=state.hours;h.placeholder="0";h.setAttribute("data-focus",fl.key);
-      h.oninput=e=>{state.hours=e.target.value;updateProgress();updateSend();};
-      inp.appendChild(h);inp.appendChild(el("span","suf","hrs"));hf.appendChild(inp);
-      body.appendChild(hf);
-    }
-    const ta=el("textarea");ta.value=state.note;ta.placeholder="Quick note for Taylor...";if(!fl.extra)ta.setAttribute("data-focus",fl.key);
-    ta.oninput=e=>{state.note=e.target.value;updateProgress();updateSend();};
-    body.appendChild(ta);box.appendChild(body);
+  FLAGS.forEach(fl=>{ if(fl.key==="materials")return; s.appendChild(flagBox(fl)); });
+  pad.appendChild(s);
+
+  // Paint & materials — check stock, and order before knock-off
+  s=sect("Paint & materials");
+  {
+    const pc=f.paint.checked;
+    const box=el("div","qrow"+(pc==="yes"?" ans-yes":(pc==="no"?" ans-note":"")));
+    box.appendChild(el("div","qt","Checked our paint & materials for tomorrow?"));
+    const opts=el("div","opts");
+    [["yes","Yes"],["no","No"]].forEach(pair=>{const b=el("button",pair[0]+(pc===pair[0]?" on":""),pair[1]);b.onclick=()=>{f.paint.checked=(f.paint.checked===pair[0]?null:pair[0]);render();};opts.appendChild(b);});
+    box.appendChild(opts);
+    if(pc==="no")box.appendChild(el("div","hint","Have a quick look before you knock off — easier than finding out tomorrow morning."));
     s.appendChild(box);
-  });
+  }
+  s.appendChild(flagBox(FLAGS.find(x=>x.key==="materials")));
   pad.appendChild(s);
 
   // Leave it clean (emphasised) — every question needs Yes / No / N/A.
   // No and N/A need a note (why not / why it doesn't apply).
   s=sect("Leave it clean");
-  s.appendChild(el("div","hint","Answer every one. No or N/A needs a quick note — e.g. droppies staying down because we're back tomorrow."));
+  s.appendChild(el("div","hint","Answer every one. A No needs a quick note — what's left, and when it'll be sorted."));
   CLEAN.forEach(p=>s.appendChild(packRow(p)));
   pad.appendChild(s);
 
@@ -871,13 +857,45 @@ function crewForm(){
   wrap.appendChild(pad);return wrap;
 }
 
+function flagBox(fl){
+  const state=f.flags[fl.key];
+  const box=el("div","flag "+(state.on?"on":"off"));
+  const head=el("button","flag-head");
+  head.innerHTML="<span class='flag-q'><b>"+fl.q+"</b><span>"+fl.sub+"</span></span><span class='yn'><i class='n'>No</i><i class='y'>Yes</i></span>";
+  head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";}render();
+    if(state.on)setTimeout(()=>{const t=document.querySelector('[data-focus="'+fl.key+'"]');if(t)t.focus();},40);};
+  box.appendChild(head);
+  const body=el("div","flag-body");
+  if(fl.delivery){
+    const before=nowMin()<ORDER_CUTOFF_MIN;
+    const co=el("div","callout"+(before?"":" late"));
+    co.innerHTML="<span class='clk'>"+(before?"🕒":"📦")+"</span><span>"+(before
+      ?"Get your order in <b>before 3:45</b> and it'll be waiting for you in the morning. ☀️"
+      :"It's <b>past 3:45</b> now — flag it here and it goes on the next order.")+"</span>";
+    body.appendChild(co);
+  }
+  if(fl.extra){
+    const hf=el("div","hoursfield");
+    hf.appendChild(el("label",null,"Hours on this extra"));
+    const inp=el("div","inp");
+    const h=el("input");h.type="number";h.min="0";h.step="0.25";h.inputMode="decimal";h.value=state.hours;h.placeholder="0";h.setAttribute("data-focus",fl.key);
+    h.oninput=e=>{state.hours=e.target.value;updateProgress();updateSend();};
+    inp.appendChild(h);inp.appendChild(el("span","suf","hrs"));hf.appendChild(inp);
+    body.appendChild(hf);
+  }
+  const ta=el("textarea");ta.value=state.note;ta.placeholder="Quick note for Taylor...";if(!fl.extra)ta.setAttribute("data-focus",fl.key);
+  ta.oninput=e=>{state.note=e.target.value;updateProgress();updateSend();};
+  body.appendChild(ta);box.appendChild(body);
+  return box;
+}
+
 function packRow(p){
   const v=f.pack[p.key];
-  const cls="qrow"+(p.primary?" primary":"")+(v==="yes"?" ans-yes":(v==="no"||v==="na")?" ans-note":"");
+  const cls="qrow"+(p.primary?" primary":"")+(v==="yes"?" ans-yes":(v==="no"?" ans-note":""));
   const box=el("div",cls);
   box.appendChild(el("div","qt",p.t));
   const opts=el("div","opts");
-  [["yes","Yes"],["no","No"],["na","N/A"]].forEach(([val,lbl])=>{
+  [["yes","Yes"],["no","No"]].forEach(([val,lbl])=>{
     const b=el("button",val+(v===val?" on":""),lbl);
     b.onclick=()=>{
       f.pack[p.key]=(f.pack[p.key]===val?null:val);
@@ -887,9 +905,9 @@ function packRow(p){
     opts.appendChild(b);
   });
   box.appendChild(opts);
-  if(v==="no"||v==="na"){
+  if(v==="no"){
     const ta=el("textarea");ta.value=f.packNotes[p.key];ta.setAttribute("data-pn",p.key);
-    ta.placeholder=v==="no"?"Why not? What happened, and when will it be sorted?":"Why doesn't this apply today?";
+    ta.placeholder="What's left, and when will it be sorted?";
     ta.oninput=e=>{f.packNotes[p.key]=e.target.value;updateProgress();updateSend();};
     box.appendChild(ta);
   }
@@ -930,7 +948,7 @@ async function doSubmit(){
     docket:"EOD-"+todayISO().replace(/-/g,"")+"-"+initials(f.worker),
     worker:f.worker,role:roleOf(f.worker),job:effectiveJob(),jobListed:f.job!=="__other__",
     workDone:f.workDone.trim(),jobUpdate:f.jobUpdate.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
-    flags:{},pack:{},notes:f.notes.trim()};
+    flags:{},pack:{},paint:{checked:f.paint.checked},notes:f.notes.trim()};
   FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0};});
   PACK_ALL.forEach(p=>{rec.pack[p.key]={v:f.pack[p.key],note:(f.packNotes[p.key]||"").trim()};});
   try{await saveSubmission(rec);}catch(e){}
@@ -1211,7 +1229,7 @@ function renderTouch(app){
 
   // Finishing (supervisor sign-off) — includes the finishing order of
   // operations reference panel at the top, then the surface sign-off ticks.
-  s=sect("Finished surfaces — supervisor sign-off");
+  s=sect("Finished surfaces — sign-off");
   const otgl=el("button","guide-toggle"+(showOrder?" open":""),"<span class='gt-label'>📋 "+(showOrder?"Hide finishing order":"Finishing order — tap to view")+"</span><span class='chev'>▾</span>");
   otgl.onclick=()=>{showOrder=!showOrder;render();};
   s.appendChild(otgl);
@@ -1235,13 +1253,13 @@ function renderTouch(app){
     s.appendChild(photoStrip("finish",stage));
     if(pendingFinish===stage){
       const sign=el("div","callout");sign.style.display="block";
-      sign.appendChild(el("div",null,"<b>Signed off by which supervisor?</b>"));
+      sign.appendChild(el("div",null,"<b>Signed off — tap your name</b>"));
       const w2=el("div","who");w2.style.marginTop="8px";
-      SUPERVISORS.forEach(sup=>{const b=el("button","",sup);b.onclick=()=>setFinish(stage,true,sup);w2.appendChild(b);});
+      CREW.forEach(c=>{const b=el("button","",c.name);b.onclick=()=>setFinish(stage,true,c.name);w2.appendChild(b);});
       const bo=el("button",otherSup==="__typing__"?"on":"","Other");bo.onclick=()=>{otherSup="__typing__";render();};w2.appendChild(bo);
       sign.appendChild(w2);
       if(otherSup==="__typing__"){
-        const oi=el("input");oi.type="text";oi.placeholder="Type who ran the job";oi.style.marginTop="8px";oi.value=otherSupName;oi.oninput=e=>{otherSupName=e.target.value;};
+        const oi=el("input");oi.type="text";oi.placeholder="Type your name";oi.style.marginTop="8px";oi.value=otherSupName;oi.oninput=e=>{otherSupName=e.target.value;};
         const ok=el("button","chip","Sign off");ok.style.marginTop="8px";ok.onclick=()=>{if(otherSupName.trim())setFinish(stage,true,otherSupName.trim());};
         sign.appendChild(oi);sign.appendChild(ok);
       }
