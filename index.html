@@ -281,7 +281,7 @@ const FLAGS = [
   {key:"makegood", extra:true,    q:"Any extra trade damage we had to fix?", sub:"Fixing damage or patching beyond the quote. What and where?"},
   {key:"variation", extra:true,   q:"Extra work or changes asked for on site?",        sub:"Who asked (builder/client) and what they wanted."},
   {key:"holdup",                  q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable."},
-  {key:"materials", delivery:true,q:"Need to order any paint or materials for tomorrow?", sub:"Paint, tints, consumables — flag anything low. Custom tints especially, they're slow."},
+  {key:"materials", delivery:true,q:"Need to order any paint or materials for tomorrow?", sub:"Paint, tints, consumables — flag anything running low, then order it yourself."},
 ];
 
 const CLEAN = [
@@ -870,8 +870,8 @@ function flagBox(fl){
     const before=nowMin()<ORDER_CUTOFF_MIN;
     const co=el("div","callout"+(before?"":" late"));
     co.innerHTML="<span class='clk'>"+(before?"🕒":"📦")+"</span><span>"+(before
-      ?"Get your order in <b>before 3:45</b> and it'll be waiting for you in the morning. ☀️"
-      :"It's <b>past 3:45</b> now — flag it here and it goes on the next order.")+"</span>";
+      ?"Order it in yourself <b>before 3:45</b> and it'll get there that arvo — then flick Taylor a text to say a delivery's coming. 📦"
+      :"<b>Past 3:45</b> now — still order what you need, and flick Taylor a text that a delivery's on the way.")+"</span>";
     body.appendChild(co);
   }
   if(fl.extra){
