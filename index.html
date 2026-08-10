@@ -278,11 +278,48 @@ let JOBS = [
 const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
 
 const FLAGS = [
-  {key:"makegood", extra:true,    q:"Any extra trade damage we had to fix?", sub:"Fixing damage or patching beyond the quote. What and where?"},
-  {key:"variation", extra:true,   q:"Extra work or changes asked for on site?",        sub:"Who asked (builder/client) and what they wanted."},
-  {key:"holdup",                  q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable."},
+  {key:"makegood", extra:true, who:"Who caused it? (trade / company / name)", photo:true, q:"Any extra trade damage we had to fix?", sub:"Fixing damage or patching beyond the quote. What and where? This sends Taylor a separate extras docket — the details here are what get it charged."},
+  {key:"variation", extra:true, who:"Who asked for it? (builder / client name)", q:"Extra work or changes asked for on site?", sub:"This sends Taylor a separate extras docket. Photos make it chargeable — take them before you leave."},
+  {key:"holdup", extra:true,      q:"Anything hold you up today?",                     sub:"Other trades in the way, access, weather, owner unreachable. Roughly how long did it cost you?"},
   {key:"materials", delivery:true,q:"Need to order any paint or materials for tomorrow?", sub:"Paint, tints, consumables — flag anything running low, then order it yourself."},
 ];
+
+// The owner's way — rotating daily deep question for apprentices.
+// One per day, chosen by the date so every apprentice gets the same one and
+// the crew can talk about it. Wording approved by Taylor 10 Aug 2026 — do not reword.
+// theme shows as a small label above the question. sub is the grey hint line.
+const OWNERS_WAY = [
+  {theme:"Why we do it this way", q:"Why do we sand walls before painting instead of just dusting them off? What happens under the new coat if you skip it?", sub:"Have a crack. Check your answer with your lead tomorrow and see how close you got."},
+  {theme:"Why we do it this way", q:"Why do we prime or seal new plaster instead of going straight to top coats? What would that wall look like in a year if we didn't?", sub:"The board and the joints do not drink paint at the same rate."},
+  {theme:"Why we do it this way", q:"Why do we do two top coats when the first one already looks covered?", sub:"Looks covered today. Think about wear, touch ups and colour depth."},
+  {theme:"Why we do it this way", q:"Why do we run a light across a patched wall instead of trusting our eyes? What does the light show that daylight hides?"},
+  {theme:"Why we do it this way", q:"Why do we cut in before we roll? What happens to the finish if you do it the other way round? And on a really hot day, what changes about how you handle it?", sub:"The second part sorts who actually understands the first part. Check your answer with your lead."},
+  {theme:"Thinking like the owner", q:"If the client walked through the job right now, what would they be stoked with, and what would they stop and look twice at?", sub:"See your own work through the eyes of the person paying for it."},
+  {theme:"Thinking like the owner", q:"What did you fully finish today, start to done, so nobody has to come back and touch it again?", sub:"Half done twice is nothing done."},
+  {theme:"Thinking like the owner", q:"Why does leaving the site like we were never here win us the next job more than the paint does?", sub:"Who does the builder talk to about us when we are not there?"},
+  {theme:"Thinking like the owner", q:"If TJP was your business, what is one thing about your own day you would have done differently? What is stopping you doing it that way tomorrow?", sub:"Your day, not anyone else's. And nothing is usually the honest answer to part two."},
+  {theme:"Getting better", q:"If Taylor handed you one room to paint start to finish, no lead, no help, which part would you nail and which part would you come unstuck on? What would it take to fix that?", sub:"Be honest. This is how we work out what to teach you next."},
+  {theme:"Getting better", q:"What is one painting task you still dodge or slow right down on when it comes up, cutting a ceiling line freehand, glossing a door without runs, rolling without fat edges, spraying? What would it take to get confident at it?", sub:"Same deal, write it here and we will get you on it."},
+  {theme:"Getting better", q:"What can you do on your own now that you could not do three months ago? And what do you want to be able to do three months from now?", sub:"If the first answer is nothing, that is worth talking about. If the second answer is nothing, that is a bigger one."},
+  {theme:"Thinking for yourself", q:"Think of something you were told to do today without being told why. Did you ask why? If not, what stopped you? Have a crack at the why now and check it with your lead tomorrow."},
+  {theme:"Thinking for yourself", q:"What was the first problem you hit today? Did you solve it, work around it, or wait for someone to tell you what to do? Would you handle it the same way again?"},
+  {theme:"Thinking for yourself", q:"What on site today did not match what you were told to expect, and what did you do about it?", sub:"A surface not sound, a colour that looked off, a room not ready. \"Nothing\" is allowed, but then write what you would do if there was."},
+  {theme:"Thinking for yourself", q:"Did you have a question today you were too scared to ask? Write it here, then ask it tomorrow.", sub:"The question feels dumb for a day. Not knowing follows you around for years."},
+  {theme:"Thinking for yourself", q:"If your lead did not turn up tomorrow, which part of your job could you not run on your own yet? What would it take to change that?"},
+  {theme:"Thinking for yourself", q:"What is one thing you watched a tradesman do today that you cannot do yet? What is actually different about how they do it?", sub:"Speed is usually the result, not the difference. Look at their order, their setup, their hands. And if you write it here, we will make sure you get taught it."},
+  {theme:"Tomorrow and time", q:"What is the hardest thing about your first job tomorrow, and how are you going to get it done?", sub:"Have the plan before you pick up a brush, not after."},
+  {theme:"Tomorrow and time", q:"How long did today's main task actually take against what you reckoned this morning? What caused the gap?", sub:"If you did not make a guess this morning, that is the answer. Start guessing, it is how you learn to quote."},
+  {theme:"Tomorrow and time", q:"What will the job run out of tomorrow if nobody sorts it tonight? Paint, sundries, access, answers from the builder. Anything.", sub:"Then flag it in Paint & materials below and order it."},
+  {theme:"Tomorrow and time", q:"If you did today over again, what would you do in a different order, and why? What would the better order have bought you, time saved, less double handling, or a better finish?", sub:"Drying times, access, and not working yourself into a corner are usually where the order matters."},
+];
+// Same question for everyone on a given day, rotates through the bank.
+function ownersWayToday(){
+  const d=new Date();
+  const dayCount=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000)+d.getFullYear()*366;
+  return OWNERS_WAY[dayCount%OWNERS_WAY.length];
+}
+// A real answer, not a grunt.
+function ownersWayAnswered(){return (f.appr.deepAnswer||"").trim().length>=20;}
 
 const CLEAN = [
   {key:"neverhere", t:"Site left like we were never here", primary:true},
@@ -391,14 +428,15 @@ function flattenRec(rec){
     date:rec.date, time:rec.time, docket:rec.docket,
     worker:rec.worker, role:rec.role, job:rec.job, jobListed:rec.jobListed,
     tasks:rec.workDone, jobUpdate:rec.jobUpdate, prep:(rec.prep||[]).join(", "), photos:rec.photos,
-    makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note,
-    variation_hrs:fl.variation.hours, variation_note:fl.variation.note,
-    holdup_note:fl.holdup.note, materials_note:fl.materials.note,
+    makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note, makegood_who:fl.makegood.who||"", makegood_materials:fl.makegood.materials||"", makegood_photo:fl.makegood.photo?"Yes":"",
+    variation_hrs:fl.variation.hours, variation_note:fl.variation.note, variation_who:fl.variation.who||"", variation_materials:fl.variation.materials||"",
+    holdup_hrs:fl.holdup.hours||0, holdup_note:fl.holdup.note, materials_note:fl.materials.note,
     clean_neverhere:packCell(rec.pack.neverhere), clean_rubbish:packCell(rec.pack.rubbish),
     clean_food:packCell(rec.pack.food), clean_masking:packCell(rec.pack.masking), clean_wiped:packCell(rec.pack.wiped),
     gear_secure:packCell(rec.pack.secure), gear_tidy:packCell(rec.pack.tidy), gear_dried:packCell(rec.pack.dried),
     materials_checked:(rec.paint&&rec.paint.checked==="yes"?"Yes":(rec.paint&&rec.paint.checked==="no"?"No":"")),
-    notes:rec.notes
+    notes:rec.notes,
+    deep_question:rec.deepQuestion||"", deep_answer:rec.deepAnswer||""
   };
 }
 // flat row from the sheet -> nested record the Supervisor view reads
@@ -413,9 +451,9 @@ function rehydrateRow(r){
     prep:t(r.prep)?t(r.prep).split(/,\s*/).filter(Boolean):[],
     photos:b(r.photos),
     flags:{
-      makegood:{on:!!t(r.makegood_note)||n(r.makegood_hrs)>0, note:t(r.makegood_note), hours:n(r.makegood_hrs)},
-      variation:{on:!!t(r.variation_note)||n(r.variation_hrs)>0, note:t(r.variation_note), hours:n(r.variation_hrs)},
-      holdup:{on:!!t(r.holdup_note), note:t(r.holdup_note), hours:0},
+      makegood:{on:!!t(r.makegood_note)||n(r.makegood_hrs)>0, note:t(r.makegood_note), hours:n(r.makegood_hrs), who:t(r.makegood_who), materials:t(r.makegood_materials), photo:t(r.makegood_photo)==="Yes"},
+      variation:{on:!!t(r.variation_note)||n(r.variation_hrs)>0, note:t(r.variation_note), hours:n(r.variation_hrs), who:t(r.variation_who), materials:t(r.variation_materials)},
+      holdup:{on:!!t(r.holdup_note)||n(r.holdup_hrs)>0, note:t(r.holdup_note), hours:n(r.holdup_hrs)},
       materials:{on:!!t(r.materials_note), note:t(r.materials_note), hours:0}
     },
     pack:{
@@ -423,7 +461,8 @@ function rehydrateRow(r){
       masking:parsePack(r.clean_masking), wiped:parsePack(r.clean_wiped),
       spray:parsePack(r.gear_spray), secure:parsePack(r.gear_secure), tidy:parsePack(r.gear_tidy), dried:parsePack(r.gear_dried)
     },
-    notes:t(r.notes)
+    notes:t(r.notes),
+    deepQuestion:t(r.deep_question), deepAnswer:t(r.deep_answer)
   };
 }
 
@@ -469,6 +508,7 @@ async function saveAppr(rec){
   if(!liveBackend())return;
   const a=f.appr, yn=v=>v===true?"Yes":v===false?"No":"";
   const body={action:"apprentice",date:rec.date,time:rec.time,worker:rec.worker,job:rec.job,
+    deep_question:ownersWayToday().q,deep_answer:(a.deepAnswer||"").trim(),
     on_time:yn(a.onTime),started_right:yn(a.startedRight),spotted:yn(a.spotted),quality_100:yn(a.quality100),
     lead_did_well:(a.wellNote||"").trim(),lead_not_100:(a.notWellNote||"").trim(),lead_timeframe:(a.timeframe||"").trim(),
     tomorrow_ready:yn(a.tomorrowReady),tomorrow_note:(a.tomorrowNote||"").trim()};
@@ -489,6 +529,9 @@ function num(x){const n=parseFloat(x);return isNaN(n)?0:n;}
 function jobOK(){return f.job&&f.job!==""&&(f.job!=="__other__"||f.jobOther.trim());}
 function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 function packAnswered(p){const v=f.pack[p.key];return v==="yes"||(v==="no"&&f.packNotes[p.key].trim());}
+// A flag is complete when it's off, or has a note, hours (if it takes them),
+// who (damage/variation), and the damage photo tick.
+function flagComplete(fl){const s=f.flags[fl.key];return !s.on||( !!s.note.trim() && (!fl.extra||num(s.hours)>0) && (!fl.who||!!(s.who||"").trim()) && (!fl.photo||s.photo===true) );}
 
 /* ======================================================================
    TJP SAFETY CONTENT — single source of truth
@@ -672,13 +715,13 @@ let supUnlocked=false, supPinTry="", supPinErr="";
 try{ if(window.localStorage && localStorage.getItem("tjp_sup_unlocked")==="1") supUnlocked=true; }catch(e){}
 function blankForm(){
   return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,
-    flags:{makegood:{on:false,note:"",hours:""},variation:{on:false,note:"",hours:""},holdup:{on:false,note:""},materials:{on:false,note:""}},
+    flags:{makegood:{on:false,note:"",hours:"",who:"",materials:"",photo:false},variation:{on:false,note:"",hours:"",who:"",materials:""},holdup:{on:false,note:"",hours:""},materials:{on:false,note:""}},
     pack:{neverhere:null,rubbish:null,food:null,masking:null,wiped:null,secure:null,tidy:null,dried:null},
     packNotes:{neverhere:"",rubbish:"",food:"",masking:"",wiped:"",secure:"",tidy:"",dried:""},
     notes:"",
     paint:{checked:null},
     // apprentice "owner's way" reflection (only used/shown for apprentices)
-    appr:{onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
+    appr:{deepAnswer:"",onTime:null,startedRight:null,spotted:null,quality100:null,wellNote:"",notWellNote:"",timeframe:"",tomorrowReady:null,tomorrowNote:""}};
 }
 function isAppr(){return f.worker && roleOf(f.worker)==="Apprentice";}
 
@@ -724,8 +767,9 @@ function progress(){
   total++;if(jobOK())done++;
   total++;if(f.workDone.trim())done++;
   total++;if(f.jobUpdate.trim())done++;
+  if(isAppr()){total++;if(ownersWayAnswered())done++;}
   total++;if(Object.values(f.prep).some(Boolean))done++;
-  FLAGS.forEach(fl=>{total++;const s=f.flags[fl.key];const ok=!s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));if(ok)done++;});
+  FLAGS.forEach(fl=>{total++;if(flagComplete(fl))done++;});
   PACK_ALL.forEach(p=>{total++;if(packAnswered(p))done++;});
   return Math.round(done/total*100);
 }
@@ -770,6 +814,19 @@ function crewForm(){
   if(isAppr()){
     s=sect("The owner's way");
     s.appendChild(el("div","hint","Before you sign off — the questions that turn a painter into a tradesman."));
+    // Today's rotating deep question — a typed answer is required to sign off.
+    {
+      const dq=ownersWayToday();
+      const dfld=el("div","field");
+      dfld.appendChild(el("div","who-role","Today's question · "+dq.theme));
+      dfld.appendChild(el("label","lab",dq.q));
+      if(dq.sub)dfld.appendChild(el("div","hint",dq.sub));
+      const dta=el("textarea");dta.value=f.appr.deepAnswer;
+      dta.placeholder="A sentence or two. What you actually reckon, not what sounds right.";
+      dta.oninput=e=>{f.appr.deepAnswer=e.target.value;updateProgress();updateSend();};
+      dfld.appendChild(dta);
+      s.appendChild(dfld);
+    }
     const yn=(q,key,sub)=>{
       const fl=el("div","field");
       fl.appendChild(el("label","lab",q));
@@ -862,7 +919,7 @@ function flagBox(fl){
   const box=el("div","flag "+(state.on?"on":"off"));
   const head=el("button","flag-head");
   head.innerHTML="<span class='flag-q'><b>"+fl.q+"</b><span>"+fl.sub+"</span></span><span class='yn'><i class='n'>No</i><i class='y'>Yes</i></span>";
-  head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";}render();
+  head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";if(fl.who){state.who="";state.materials="";}if(fl.photo)state.photo=false;}render();
     if(state.on)setTimeout(()=>{const t=document.querySelector('[data-focus="'+fl.key+'"]');if(t)t.focus();},40);};
   box.appendChild(head);
   const body=el("div","flag-body");
@@ -883,9 +940,23 @@ function flagBox(fl){
     inp.appendChild(h);inp.appendChild(el("span","suf","hrs"));hf.appendChild(inp);
     body.appendChild(hf);
   }
-  const ta=el("textarea");ta.value=state.note;ta.placeholder="Quick note for Taylor...";if(!fl.extra)ta.setAttribute("data-focus",fl.key);
+  const ta=el("textarea");ta.value=state.note;ta.placeholder=fl.who?"What happened, and where? Enough detail to charge it...":"Quick note for Taylor...";if(!fl.extra)ta.setAttribute("data-focus",fl.key);
   ta.oninput=e=>{state.note=e.target.value;updateProgress();updateSend();};
-  body.appendChild(ta);box.appendChild(body);
+  body.appendChild(ta);
+  if(fl.who){
+    const wi=el("input");wi.type="text";wi.value=state.who||"";wi.placeholder=fl.who;wi.style.marginTop="9px";
+    wi.oninput=e=>{state.who=e.target.value;updateProgress();updateSend();};
+    body.appendChild(wi);
+    const mi=el("input");mi.type="text";mi.value=state.materials||"";mi.placeholder="Materials used (optional)";mi.style.marginTop="9px";
+    mi.oninput=e=>{state.materials=e.target.value;};
+    body.appendChild(mi);
+  }
+  if(fl.photo){
+    const pt=el("button","tick"+(state.photo?" on":""),"<span class='box'></span>Photos taken of the damage <small style='color:#8A8F97'>(required — no photo, no charge)</small>");
+    pt.onclick=()=>{state.photo=!state.photo;render();};
+    body.appendChild(pt);
+  }
+  box.appendChild(body);
   return box;
 }
 
@@ -921,7 +992,8 @@ function updateSend(){const b=$(".send");if(b)b.disabled=!canSend();}
 function canSend(){
   return f.worker&&jobOK()
     &&f.jobUpdate.trim()
-    &&FLAGS.every(fl=>{const s=f.flags[fl.key];return !s.on||(s.note.trim()&&(!fl.extra||num(s.hours)>0));})
+    &&(!isAppr()||ownersWayAnswered())
+    &&FLAGS.every(flagComplete)
     &&PACK_ALL.every(packAnswered);
 }
 
@@ -933,8 +1005,11 @@ function submitBar(){
   if(!f.worker)missing="Tap your name to start";
   else if(!jobOK())missing="Pick which job you were on";
   else if(!f.jobUpdate.trim())missing="Add your job update — Taylor & Michael schedule off it";
+  else if(isAppr()&&!ownersWayAnswered())missing="Answer today's owner's way question — a proper sentence, not a grunt";
   else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.extra&&!(num(s.hours)>0);}))missing="Add the hours on your flagged extras";
   else if(FLAGS.some(fl=>f.flags[fl.key].on&&!f.flags[fl.key].note.trim()))missing="Add a note to your flagged items";
+  else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.who&&!(s.who||"").trim();}))missing="Add who caused it or who asked — the docket needs a name";
+  else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.photo&&s.photo!==true;}))missing="Take photos of the damage and tick the box — no photo, no charge";
   else if(PACK_ALL.some(p=>!f.pack[p.key]))missing="Answer every clean-up & gear question — Yes, No or N/A";
   else if(PACK_ALL.some(p=>{const v=f.pack[p.key];return(v==="no"||v==="na")&&!f.packNotes[p.key].trim();}))missing="Add a quick note on anything marked No or N/A";
   inner.appendChild(el("div","send-note",missing));
@@ -948,8 +1023,9 @@ async function doSubmit(){
     docket:"EOD-"+todayISO().replace(/-/g,"")+"-"+initials(f.worker),
     worker:f.worker,role:roleOf(f.worker),job:effectiveJob(),jobListed:f.job!=="__other__",
     workDone:f.workDone.trim(),jobUpdate:f.jobUpdate.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
-    flags:{},pack:{},paint:{checked:f.paint.checked},notes:f.notes.trim()};
-  FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0};});
+    flags:{},pack:{},paint:{checked:f.paint.checked},notes:f.notes.trim(),
+    deepQuestion:isAppr()?ownersWayToday().q:"",deepAnswer:isAppr()?(f.appr.deepAnswer||"").trim():""};
+  FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0,who:fl.who?(s.who||"").trim():"",materials:fl.who?(s.materials||"").trim():"",photo:fl.photo?s.photo===true:false};});
   PACK_ALL.forEach(p=>{rec.pack[p.key]={v:f.pack[p.key],note:(f.packNotes[p.key]||"").trim()};});
   try{await saveSubmission(rec);}catch(e){}
   if(isAppr()){ try{await saveAppr(rec);}catch(e){} }
@@ -966,7 +1042,7 @@ function showReceipt(rec){
   const flagged=Object.values(rec.flags).filter(x=>x.on).length;
   const xh=extraHoursOf(rec);
   let line=flagged?(flagged+" item"+(flagged>1?"s":"")+" flagged for him to look at."):"Nothing flagged. All routine.";
-  if(xh>0)line+=" "+(xh%1?xh:xh)+" hrs of extras logged.";
+  if(xh>0)line+=" "+(xh%1?xh:xh)+" hrs of extras logged — a separate extras docket has gone to Taylor.";
   r.appendChild(el("p",line));
   r.appendChild(el("div","ref",rec.docket));
   const again=el("button",null,"Done");again.onclick=()=>{f=blankForm();view="crew";render();};
@@ -1070,11 +1146,15 @@ function crewCard(s){
     const r=el("div","row flagrow");
     const hd=el("div","hd");
     hd.appendChild(el("div","k","<span class='pip'></span>"+FL[k]));
-    if((k==="makegood"||k==="variation")&&num(v.hours)>0){
+    if(num(v.hours)>0){
       hd.appendChild(el("div","cost",v.hours+"h"));
     }
     r.appendChild(hd);
-    r.appendChild(el("div","v",v.note||"(flagged, no note)"));
+    let detail=v.note||"(flagged, no note)";
+    if(v.who)detail+=" — "+escapeHtml(v.who);
+    if(v.materials)detail+=" — materials: "+escapeHtml(v.materials);
+    if(k==="makegood")detail+=v.photo?" — 📷 photos taken":" — ⚠ no photos";
+    r.appendChild(el("div","v",detail));
     body.appendChild(r);
   });
   if(s.jobUpdate){const r=el("div","row");r.appendChild(el("div","k","Job update for Taylor & Michael"));r.appendChild(el("div","v",s.jobUpdate));body.appendChild(r);}
@@ -1089,6 +1169,7 @@ function crewCard(s){
     pd.appendChild(el("span",cls,sym+label+(a.note?" — "+a.note:"")));
   });
   r.appendChild(pd);body.appendChild(r);
+  if(s.deepAnswer){const rq=el("div","row");rq.appendChild(el("div","k","The owner's way — today's question"));rq.appendChild(el("div","v","<i style='color:#8A8F97'>"+escapeHtml(s.deepQuestion||"")+"</i><br>"+escapeHtml(s.deepAnswer)));body.appendChild(rq);}
   const meta=el("div","row");meta.appendChild(el("div","k","Submitted"));meta.appendChild(el("div","v",s.time+(s.photos?"  ·  photos taken":"")+"  ·  "+s.docket));body.appendChild(meta);
   if(s.notes){const rn=el("div","row");rn.appendChild(el("div","k","Notes"));rn.appendChild(el("div","v",s.notes));body.appendChild(rn);}
   c.appendChild(body);
