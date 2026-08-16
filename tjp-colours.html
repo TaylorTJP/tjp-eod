@@ -1,25 +1,26 @@
 <!-- TJP Colour Selection - client-facing, single file, no build step.
      Vanilla JS so it drops straight into Claude Code / the tjp-eod repo.
-
      Two tabs: INTERIOR and EXTERIOR - each its own page of colour line items.
      No job dropdown: the client just enters their name + address + contact, and
      picks colours per area. On submit it saves the selection and emails Taylor.
-
      DEMO vs LIVE: leave API_URL as the placeholder and submissions just show a
      confirmation (nothing saved). Paste your Apps Script /exec URL into API_URL
      (see tjp-colours-backend.gs) to save into Drive + email you. That one line
      is the only >>> SWAP POINT <<<.
-
      LOGO: currently a built-in vector version of the TJP badge. To use the exact
      logo file instead, save it next to this file as "tjp-logo.png" and replace
      the LOGO_SVG usage in header()/showReceipt() with:
-        <img src="tjp-logo.png" alt="TJP"> -->
+        <img src="tjp-logo.png" alt="TJP">
+     COLORBOND: the EXTERIOR tab also carries the COLORBOND(R) steel range for
+     roof, gutters, fascia and garage doors. Those swatches are match targets -
+     the paint gets colour-matched to the Colorbond shade. They only show on the
+     Exterior tab (flagged x:true in the COLOURS list). RGB values are BlueScope's
+     published digital colour values; still indicative on screen. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>TJP · Colour selection</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
-
   :root{
     --paper:#ECEAE3; --card:#FFFFFF;
     --ink:#1C1F22; --ink-soft:#5C616A; --ink-faint:#8A8F97;
@@ -32,7 +33,6 @@
   html,body{margin:0;padding:0}
   body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
   .wrap{max-width:520px;margin:0 auto;padding:0 0 130px}
-
   .band{background:var(--band);color:#fff;padding:13px 20px 12px}
   .band-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .brand{display:flex;align-items:center;gap:13px}
@@ -42,30 +42,25 @@
   .brandtxt small{display:block;font-size:11px;font-weight:600;letter-spacing:.18em;color:#A9B0B8;margin-top:5px;text-transform:uppercase}
   .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;text-align:right;line-height:1.6}
   .docket b{color:#fff;font-weight:500}
-
   .segn{display:flex;background:#2E353C;border-radius:9px;padding:3px;margin-top:10px}
   .segn button{flex:1;appearance:none;border:0;cursor:pointer;background:transparent;color:#AEB4BC;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.1em;text-transform:uppercase;padding:9px 6px;border-radius:7px}
   .segn button.on{background:var(--paper);color:var(--ink)}
-
   .intro{padding:10px 16px 0;color:var(--ink-soft);font-size:13.5px;line-height:1.42}
   .pad{padding:8px 16px 0}
   .sect{margin-bottom:20px}
   .eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:14px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 10px 2px;display:flex;align-items:center;gap:8px}
   .eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
-
   .field{margin-bottom:12px}
   label.lab{display:block;font-size:13.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px 2px}
   input[type=text],textarea{width:100%;font-family:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:13px;outline:none}
   textarea{min-height:60px;resize:vertical;line-height:1.4}
   input:focus,textarea:focus{border-color:var(--band);box-shadow:0 0 0 3px rgba(34,40,46,.12)}
-
   .area{background:var(--card);border:1.5px solid var(--line);border-radius:12px;margin-bottom:11px;overflow:hidden}
   .area-head{display:flex;align-items:center;gap:10px;padding:13px 14px}
   .area-name{flex:1;font-weight:700;font-size:16.5px}
   .area-name input{font-weight:700;font-size:16px;padding:8px 10px}
   .area-del{appearance:none;border:0;background:transparent;color:var(--ink-faint);cursor:pointer;font-size:22px;line-height:1;padding:2px 6px;border-radius:7px}
   .area-body{padding:0 14px 14px}
-
   .pick{width:100%;appearance:none;cursor:pointer;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;min-height:var(--tap);display:flex;align-items:center;gap:12px;font-family:inherit;font-size:15.5px;font-weight:500;color:var(--ink)}
   .pick .sw{width:26px;height:26px;border-radius:7px;border:1px solid rgba(0,0,0,.15);flex:none;background:#fff}
   .pick .lbl{flex:1}
@@ -73,7 +68,6 @@
   .pick .lbl span{display:block;font-size:12.5px;color:var(--ink-faint);margin-top:1px}
   .pick .chev{color:var(--ink-faint);font-size:13px}
   .pick.empty .lbl{color:var(--ink-faint);font-weight:500}
-
   .panel{margin-top:10px;border:1.5px solid var(--line);border-radius:11px;background:#FBFAF6;overflow:hidden}
   .panel .search{padding:10px}
   .panel .search input{background:#fff}
@@ -87,7 +81,6 @@
   .other{border-top:1px solid var(--line);padding:11px}
   .other label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px 2px}
   .none{padding:14px;text-align:center;color:var(--ink-faint);font-size:13.5px}
-
   .finish{margin-top:12px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{appearance:none;cursor:pointer;background:var(--card);border:1.5px solid var(--line);border-radius:9px;padding:9px 12px;min-height:42px;font-family:inherit;font-size:14px;font-weight:500;color:var(--ink);display:flex;align-items:center;gap:8px}
@@ -114,19 +107,17 @@
   .ackbox.on .box::after{content:"";width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(40deg) translateY(-1px)}
   .ack-t{font-size:13px;line-height:1.4;font-weight:500}
   .roomnote{margin-top:12px}
-
   .addarea{width:100%;appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:11px;padding:14px;min-height:var(--tap);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink-soft);margin-bottom:8px}
-
   .indic{display:flex;gap:9px;align-items:flex-start;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px;padding:11px 12px;margin:6px 0 2px;font-size:13px;color:#7A4A12;line-height:1.4}
   .browse{margin:10px 0 2px}
   .browse a{display:block;text-align:center;text-decoration:none;background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:11px;font-size:13.5px;font-weight:600;color:var(--ink)}
-
+  .browse a + a{margin-top:8px}
+  .browse a small{display:block;font-weight:500;font-size:11.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:0}
   .bar{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(to top,var(--paper) 72%,rgba(236,234,227,0));padding:14px 16px calc(16px + env(safe-area-inset-bottom))}
   .bar-inner{max-width:520px;margin:0 auto}
   .send{width:100%;appearance:none;border:0;cursor:pointer;background:var(--green);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;letter-spacing:.05em;text-transform:uppercase;padding:16px;border-radius:12px;min-height:56px;box-shadow:0 6px 18px rgba(28,122,75,.28)}
   .send:disabled{background:#B9C2BB;box-shadow:none;cursor:not-allowed}
   .send-note{text-align:center;font-size:12.5px;color:var(--ink-faint);margin-top:9px}
-
   .receipt{padding:44px 22px}
   .receipt .ok{width:74px;height:74px;border-radius:50%;background:var(--green-soft);border:2px solid var(--green-line);margin:0 auto 22px;display:grid;place-items:center}
   .receipt .ok::after{content:"";width:18px;height:34px;border:5px solid var(--green);border-top:0;border-left:0;transform:rotate(40deg) translateY(-3px)}
@@ -144,14 +135,11 @@
   .demo-note{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:18px 28px 30px;line-height:1.5}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
-
 <div id="app"></div>
-
 <script>
 /* ====================== CONFIG (edit these) ====================== */
 // >>> SWAP POINT <<<  Paste your Apps Script /exec Web app URL here to go live.
 var API_URL = "https://script.google.com/macros/s/AKfycby2_x0kmmmnsxTvPGvVrIa8_JbppgY828P4WYyormB1jCuoxJ8NNkh3gOghsfd4NCQW/exec";
-
 // Built-in vector logo (swap for <img src="tjp-logo.png"> to use the real file).
 var LOGO_SVG = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TJP - Taylor Johnston Painting">'
   + '<circle cx="100" cy="100" r="99" fill="#F7F6F1"/>'
@@ -160,7 +148,6 @@ var LOGO_SVG = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" ro
   + '<text x="101" y="112" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="700" font-size="76" letter-spacing="2" fill="#141414">TJP</text>'
   + '<text x="101" y="139" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="600" font-size="9.4" letter-spacing="1.3" fill="#141414">TAYLOR JOHNSTON PAINTING</text>'
   + '</svg>';
-
 // Default line items per tab. Client can rename, remove, or add more.
 var DEFAULT_INTERIOR = [
   {name:"Ceilings",        finish:"Flat / ceiling"},
@@ -179,8 +166,10 @@ var DEFAULT_EXTERIOR = [
   {name:"Garage door",           finish:"Satin"}
 ];
 var FINISHES = ["Flat / ceiling","Low sheen","Satin","Semi-gloss","Gloss","Not sure"];
-
-// Curated Dulux colours. Hex values are INDICATIVE for on-screen swatches only.
+// Curated colours. Hex values are INDICATIVE for on-screen swatches only.
+//   b: brand — leave off for Dulux, "Colorbond" for the steel range.
+//   x: true  — exterior tab only (the Colorbond roof/gutter/fascia colours).
+// Colorbond RGB values are BlueScope's published digital colour values.
 var COLOURS = [
   {g:"Whites & off-whites", n:"Vivid White",            c:"W01A",  h:"#F4F3EE"},
   {g:"Whites & off-whites", n:"Natural White",          c:"W16",   h:"#EFE9DA"},
@@ -208,19 +197,45 @@ var COLOURS = [
   {g:"Darks & charcoals", n:"Western Myall", c:"SN4H1", h:"#4B4844"},
   {g:"Darks & charcoals", n:"Namadji",       c:"SN4H8", h:"#3B3C3D"},
   {g:"Darks & charcoals", n:"Domino",        c:"SN4G9", h:"#34383B"},
-  {g:"Darks & charcoals", n:"Black",         c:"PN1N9", h:"#1D1D1D"}
+  {g:"Darks & charcoals", n:"Black",         c:"PN1N9", h:"#1D1D1D"},
+  /* ---- COLORBOND(R) steel — exterior tab only (roof, gutters, fascia) ---- */
+  {g:"Colorbond — classic", n:"Dover White",    c:"", h:"#F9FBF1", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Surfmist",       c:"", h:"#E4E2D5", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Southerly",      c:"", h:"#D2D1CB", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Classic Cream",  c:"", h:"#E9DCB8", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Paperbark",      c:"", h:"#CABFA4", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Evening Haze",   c:"", h:"#C5C2AA", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Shale Grey",     c:"", h:"#BDBFBA", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Dune",           c:"", h:"#B1ADA3", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Bluegum",        c:"", h:"#969799", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Windspray",      c:"", h:"#888B8A", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Gully",          c:"", h:"#857E73", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Wallaby",        c:"", h:"#7F7C78", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Pale Eucalypt",  c:"", h:"#7C846A", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Jasper",         c:"", h:"#6C6153", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Basalt",         c:"", h:"#6D6C6E", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Manor Red",      c:"", h:"#5E1D0E", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Woodland Grey",  c:"", h:"#4B4C46", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Cottage Green",  c:"", h:"#304C3C", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Deep Ocean",     c:"", h:"#364152", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Ironstone",      c:"", h:"#3E434C", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Monument",       c:"", h:"#323233", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Night Sky",      c:"", h:"#131313", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Surfmist Matt",   c:"", h:"#EAE9E0", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Shale Grey Matt", c:"", h:"#C6C9C4", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Dune Matt",       c:"", h:"#BDB3A7", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Bluegum Matt",    c:"", h:"#969B9B", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Basalt Matt",     c:"", h:"#5F615D", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Monument Matt",   c:"", h:"#292E2A", b:"Colorbond", x:true}
 ];
-
 /* ====================== STATE ====================== */
 var tab="Interior"; // Interior | Exterior
 var client={name:"",address:"",contact:""};
 var interiorAreas=[], exteriorAreas=[];
 var uid=1;
-
 function mk(list){ return list.map(function(a){return {id:uid++,name:a.name,fixed:true,colour:null,other:"",finish:a.finish,recommended:a.finish,include:true,asExisting:false,ackMatch:false,note:"",open:false,sameAsTrim:false,vividAck:false};}); }
 function seed(){ interiorAreas=mk(DEFAULT_INTERIOR); exteriorAreas=mk(DEFAULT_EXTERIOR); }
 function curAreas(){ return tab==="Interior"?interiorAreas:exteriorAreas; }
-
 /* ====================== STORAGE (swap point) ====================== */
 function liveBackend(){return /^https?:\/\//.test(API_URL) && API_URL.indexOf("PASTE_YOUR")<0;}
 async function saveSelection(rec){
@@ -230,7 +245,6 @@ async function saveSelection(rec){
   }
   try{ if(window.storage&&window.storage.set){ await window.storage.set("colours:"+rec.docket, JSON.stringify(rec), true);} }catch(e){}
 }
-
 /* ====================== HELPERS ====================== */
 function $(s,r){return (r||document).querySelector(s);}
 function el(t,c){var e=document.createElement(t);if(c)e.className=c;return e;}
@@ -238,6 +252,15 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(ch){retu
 function todayISO(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function nowTime(){return new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
 function slug(s){return String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");}
+function brandOf(c){ return (c&&c.brand)||(c&&c.b)||"Dulux"; }
+// Sub-label under a chosen colour: "Dulux SN1F4" / "Colorbond® — we colour-match".
+function colourSub(c){
+  if(!c) return "";
+  if(c.custom) return "Your colour";
+  var br=brandOf(c);
+  if(br==="Colorbond") return "Colorbond® — paint colour-matched";
+  return br+(c.code?(" "+c.code):"");
+}
 function trimAreaFor(a){
   if(!/^doors$/i.test((a.name||"").trim())) return null;
   return curAreas().filter(function(x){return x.id!==a.id && /woodwork\s*&\s*trim/i.test(x.name||"");})[0] || null;
@@ -248,7 +271,7 @@ function chosenColour(a){
   return a.colour;
 }
 function effectiveFinish(a){ if(a.sameAsTrim){ var t=trimAreaFor(a); if(t) return t.finish; } return a.finish; }
-function isVivid(c){ return !!c && !c.custom && /^vivid white$/i.test(c.name||""); }
+function isVivid(c){ return !!c && !c.custom && /^vivid white$/i.test(c.name||"") && brandOf(c)==="Dulux"; }
 function areaFilled(a){ return a.asExisting || chosenColour(a); }
 function filledIn(list){ return list.filter(function(a){return a.include && areaFilled(a);}).length; }
 function filledCount(){ return filledIn(interiorAreas)+filledIn(exteriorAreas); }
@@ -261,7 +284,6 @@ function ackNeeded(){
   });
 }
 function canSend(){ return !!client.name.trim() && !!client.address.trim() && filledCount()>0 && !ackNeeded(); }
-
 /* ====================== RENDER ====================== */
 function render(){
   var app=$("#app"); app.innerHTML="";
@@ -270,7 +292,6 @@ function render(){
   app.appendChild(form());
   app.appendChild(submitBar());
 }
-
 function header(){
   var wrap=el("div","wrap");
   var band=el("div","band");
@@ -287,7 +308,6 @@ function header(){
   wrap.appendChild(band);
   return wrap;
 }
-
 function intro(){
   var wrap=el("div","wrap");
   var p=el("div","intro");
@@ -295,39 +315,46 @@ function intro(){
   wrap.appendChild(p);
   return wrap;
 }
-
+function browseLink(href,title,sub){
+  var a=document.createElement("a");
+  a.href=href; a.target="_blank"; a.rel="noopener";
+  a.innerHTML=esc(title)+(sub?("<small>"+esc(sub)+"</small>"):"");
+  return a;
+}
 function form(){
   var wrap=el("div","wrap"); var pad=el("div","pad");
-
   // Client details (shared across both tabs)
   var s=sect("Your details");
   s.appendChild(textField("Your name", client.name, function(v){client.name=v;updateSend();}, "Name"));
   s.appendChild(textField("Property address", client.address, function(v){client.address=v;updateSend();}, "Street, suburb"));
   s.appendChild(textField("Best contact (phone or email)", client.contact, function(v){client.contact=v;}, "So Taylor can confirm with you"));
   pad.appendChild(s);
-
   // Tab colours
   s=sect(tab+" colours");
   var browse=el("div","browse");
-  var a=document.createElement("a");
-  if(tab==="Interior"){ a.href="https://www.dulux.com.au/colour/schemes-styles/schemes/interior/"; a.textContent="Browse the full Dulux interior range"; }
-  else { a.href="https://www.dulux.com.au/colour/schemes-styles/schemes/exterior/"; a.textContent="Browse Dulux exterior colour schemes"; }
-  a.target="_blank"; a.rel="noopener"; browse.appendChild(a); s.appendChild(browse);
+  if(tab==="Interior"){
+    browse.appendChild(browseLink("https://www.dulux.com.au/colour/schemes-styles/schemes/interior/","Browse the full Dulux interior range"));
+  } else {
+    browse.appendChild(browseLink("https://www.dulux.com.au/colour/schemes-styles/schemes/exterior/","Browse Dulux exterior colour schemes"));
+    browse.appendChild(browseLink("https://colorbond.com/colours","Browse the Colorbond® colour range","Roof, gutters, fascia & garage doors — we colour-match the paint"));
+  }
+  s.appendChild(browse);
   var ind=el("div","indic");
   ind.innerHTML="<span>🎨</span><span>Swatches on screen are a guide only — real paint can look different. For big decisions, ask us for a physical sample before you lock it in.</span>";
   s.appendChild(ind);
+  if(tab==="Exterior"){
+    var cb=el("div","indic");
+    cb.innerHTML="<span>🏠</span><span>Roof, gutters and fascia are usually picked from the <b>Colorbond®</b> range — scroll to the Colorbond groups in the colour list. We match the paint to the Colorbond shade; it's paint on your existing roof, not new steel.</span>";
+    s.appendChild(cb);
+  }
   pad.appendChild(s);
-
   var list=el("div"); list.id="areas";
   curAreas().forEach(function(ar){list.appendChild(areaCard(ar));});
   pad.appendChild(list);
-
   var add=el("button","addarea"); add.textContent="+  Add another area";
   add.onclick=function(){addArea();}; pad.appendChild(add);
-
   wrap.appendChild(pad); return wrap;
 }
-
 function sect(t){var s=el("div","sect");var e=el("p","eyebrow");e.textContent=t;s.appendChild(e);return s;}
 function lab(t){var l=el("label","lab");l.textContent=t;return l;}
 function textField(labelText, val, oninput, placeholder){
@@ -335,28 +362,21 @@ function textField(labelText, val, oninput, placeholder){
   var i=document.createElement("input"); i.type="text"; i.value=val||""; if(placeholder)i.placeholder=placeholder;
   i.oninput=function(e){oninput(e.target.value);}; fld.appendChild(i); return fld;
 }
-
 function areaCard(a){
   var card=el("div","area"+(a.include?"":" off"));
   var head=el("div","area-head");
-
   var inc=el("button","inc"+(a.include?" on":"")); inc.innerHTML="<span class='box'></span>";
   inc.title=a.include?"We're painting this — untick to skip":"Ticked areas are included";
   inc.onclick=function(){a.include=!a.include; if(!a.include)a.open=false; render();};
   head.appendChild(inc);
-
   var nm=el("div","area-name");
   if(a.fixed){ nm.textContent=a.name; }
   else{ var ni=document.createElement("input"); ni.type="text"; ni.value=a.name; ni.placeholder="Area (e.g. Hallway)"; ni.oninput=function(e){a.name=e.target.value;}; nm.appendChild(ni); }
   head.appendChild(nm);
-
   var del=el("button","area-del"); del.innerHTML="&times;"; del.title="Remove"; del.onclick=function(){ interiorAreas=interiorAreas.filter(function(x){return x.id!==a.id;}); exteriorAreas=exteriorAreas.filter(function(x){return x.id!==a.id;}); render(); };
   head.appendChild(del); card.appendChild(head);
-
   if(!a.include){ return card; }
-
   var body=el("div","area-body");
-
   // "Same colour as Woodwork & trim" option (Doors only, when a trim area exists)
   var trimSrc=trimAreaFor(a);
   if(trimSrc){
@@ -365,7 +385,6 @@ function areaCard(a){
     same.onclick=function(){ a.sameAsTrim=!a.sameAsTrim; if(a.sameAsTrim){ a.asExisting=false; a.ackMatch=false; a.open=false; } render(); };
     body.appendChild(same);
   }
-
   if(a.sameAsTrim){
     var inh=chosenColour(a);
     var info=el("div","pick");
@@ -374,7 +393,7 @@ function areaCard(a){
     else if(inh) isw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
     info.appendChild(isw);
     var ilb=el("span","lbl");
-    if(inh){ ilb.innerHTML="<b>"+esc(inh.name)+"</b>"+(inh.code?"<span>Dulux "+esc(inh.code)+" · matches trim</span>":"<span>Matches trim</span>"); }
+    if(inh){ ilb.innerHTML="<b>"+esc(inh.name)+"</b><span>"+esc(colourSub(inh)+(colourSub(inh)?" · ":"")+"matches trim")+"</span>"; }
     else { ilb.textContent="Set a colour on Woodwork & trim first"; }
     info.appendChild(ilb);
     body.appendChild(info);
@@ -384,7 +403,6 @@ function areaCard(a){
     ex.innerHTML="<span class='box'></span>Match existing colour (paint as existing)";
     ex.onclick=function(){a.asExisting=!a.asExisting; if(a.asExisting)a.open=false; else a.ackMatch=false; render();};
     body.appendChild(ex);
-
     if(a.asExisting){
       var ack=el("button","ackbox"+(a.ackMatch?" on":""));
       ack.innerHTML="<span class='box'></span><span class='ack-t'>I understand colour matches aren't always 100% accurate, and delivering a sample to the paint shop for matching may incur an extra charge.</span>";
@@ -398,14 +416,13 @@ function areaCard(a){
       if(chosen&&!chosen.hex)sw.style.background="repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
       pk.appendChild(sw);
       var lb=el("span","lbl");
-      if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(chosen.code?"<span>Dulux "+esc(chosen.code)+"</span>":(chosen.custom?"<span>Your colour</span>":"")); }
+      if(chosen){ lb.innerHTML="<b>"+esc(chosen.name)+"</b>"+(colourSub(chosen)?("<span>"+esc(colourSub(chosen))+"</span>"):""); }
       else { lb.textContent="Choose a colour"; }
       pk.appendChild(lb);
       var cv=el("span","chev"); cv.textContent=a.open?"▲":"▼"; pk.appendChild(cv);
       pk.onclick=function(){a.open=!a.open;render();};
       body.appendChild(pk);
       if(a.open) body.appendChild(swatchPanel(a));
-
       if(!a.open && isVivid(chosen)){
         var vack=el("button","ackbox"+(a.vividAck?" on":""));
         vack.innerHTML="<span class='box'></span><span class='ack-t'>Vivid White has no tint, so it can need an extra coat for full coverage. Lexicon Quarter is a very similar white that covers more easily — happy to go with Vivid White anyway.</span>";
@@ -414,7 +431,6 @@ function areaCard(a){
       }
     }
   }
-
   // finish as chips (no dropdown); recommended sheen marked in green — skipped when colour is inherited from trim
   if(!a.sameAsTrim){
     var fw=el("div","finish");
@@ -429,19 +445,16 @@ function areaCard(a){
     });
     fw.appendChild(chips); body.appendChild(fw);
   }
-
   var rn=el("div","roomnote"); rn.appendChild(lab("Note — optional (e.g. which rooms, feature wall)"));
   var nt=document.createElement("textarea"); nt.value=a.note; nt.placeholder="Anything specific for this area"; nt.oninput=function(e){a.note=e.target.value;};
   rn.appendChild(nt); body.appendChild(rn);
-
   card.appendChild(body);
   return card;
 }
-
 function swatchPanel(a){
   var p=el("div","panel");
   var sb=el("div","search");
-  var si=document.createElement("input"); si.type="text"; si.placeholder="Search colours..."; si.value=a._q||"";
+  var si=document.createElement("input"); si.type="text"; si.placeholder=tab==="Exterior"?"Search colours (try “colorbond”)...":"Search colours..."; si.value=a._q||"";
   si.oninput=function(e){a._q=e.target.value; repaintGrid(a,p);};
   sb.appendChild(si); p.appendChild(sb);
   var gw=el("div","gridwrap"); p.appendChild(gw); paintGrid(a,gw);
@@ -456,30 +469,37 @@ function repaintGrid(a,panel){ var gw=panel.querySelector(".gridwrap"); if(gw)pa
 function paintGrid(a,gw){
   gw.innerHTML="";
   var q=(a._q||"").trim().toLowerCase();
-  var matches=COLOURS.filter(function(c){return !q||c.n.toLowerCase().indexOf(q)>=0||(c.c&&c.c.toLowerCase().indexOf(q)>=0);});
+  // Colorbond swatches (x:true) only show on the Exterior tab.
+  var pool=COLOURS.filter(function(c){ return !c.x || tab==="Exterior"; });
+  var matches=pool.filter(function(c){
+    if(!q) return true;
+    return c.n.toLowerCase().indexOf(q)>=0
+        || (c.c&&c.c.toLowerCase().indexOf(q)>=0)
+        || (c.b&&c.b.toLowerCase().indexOf(q)>=0);
+  });
   if(!matches.length){ var n=el("div","none"); n.textContent="No matches — use “Type your colour” below."; gw.appendChild(n); return; }
   var groups=matches.map(function(c){return c.g;}).filter(function(v,i,arr){return arr.indexOf(v)===i;});
   groups.forEach(function(g){
     var gl=el("div","grouplab"); gl.textContent=g; gw.appendChild(gl);
     var grid=el("div","grid");
     matches.filter(function(c){return c.g===g;}).forEach(function(c){
-      var on=a.colour&&a.colour.name===c.n;
+      var on=a.colour&&a.colour.name===c.n&&brandOf(a.colour)===brandOf(c);
       var b=el("button","swatch"+(on?" on":""));
       var bx=el("span","box"); bx.style.background=c.h; b.appendChild(bx);
-      var nm=el("span","nm"); nm.innerHTML=esc(c.n)+"<small>Dulux "+esc(c.c)+"</small>"; b.appendChild(nm);
-      b.onclick=function(){ a.colour={name:c.n,code:c.c,hex:c.h}; a.other=""; a.open=false; render(); };
+      var nm=el("span","nm");
+      var sub=c.b==="Colorbond" ? "Colorbond®" : ("Dulux"+(c.c?(" "+c.c):""));
+      nm.innerHTML=esc(c.n)+"<small>"+esc(sub)+"</small>"; b.appendChild(nm);
+      b.onclick=function(){ a.colour={name:c.n,code:c.c,hex:c.h,brand:c.b||"Dulux"}; a.other=""; a.open=false; render(); };
       grid.appendChild(b);
     });
     gw.appendChild(grid);
   });
 }
-
 function addArea(){
   curAreas().push({id:uid++,name:"",fixed:false,colour:null,other:"",finish:"Low sheen",recommended:"Low sheen",include:true,asExisting:false,ackMatch:false,note:"",open:false,sameAsTrim:false,vividAck:false});
   render();
   setTimeout(function(){var inps=document.querySelectorAll("#areas .area-name input"); if(inps.length)inps[inps.length-1].focus();},30);
 }
-
 function updateSend(){var b=$(".send");if(b)b.disabled=!canSend();var n=$(".send-note");if(n)n.textContent=sendNote();}
 function sendNote(){
   if(!client.name.trim())return "Add your name to start";
@@ -490,7 +510,6 @@ function sendNote(){
   if(i)parts.push(i+" interior"); if(x)parts.push(x+" exterior");
   return parts.join(" + ")+" ready — goes straight to Taylor";
 }
-
 function submitBar(){
   var bar=el("div","bar"); var inner=el("div","bar-inner");
   var b=el("button","send"); b.textContent="Send my colours to Taylor"; b.disabled=!canSend(); b.onclick=doSubmit;
@@ -498,14 +517,16 @@ function submitBar(){
   var note=el("div","send-note"); note.textContent=sendNote(); inner.appendChild(note);
   bar.appendChild(inner); return bar;
 }
-
+// Colorbond picks go out as "Colorbond Monument" so the email/Drive copy is
+// unambiguous at the paint shop. Dulux picks are unchanged.
+function outName(c){ return brandOf(c)==="Colorbond" ? ("Colorbond "+c.name) : c.name; }
 function collect(list, scope){
   return list.filter(function(a){return a.include && areaFilled(a);}).map(function(a){
     if(a.asExisting){
       return {scope:scope, area:a.name||"(unnamed)", colour:"As existing (match existing colour)", code:"", finish:effectiveFinish(a)||"", note:(a.note||"").trim(), existing:true, ackMatch:!!a.ackMatch};
     }
     var c=chosenColour(a);
-    return {scope:scope, area:a.name||"(unnamed)"+(a.sameAsTrim?" (matches Woodwork & trim)":""), colour:c.name, code:c.code||"", finish:effectiveFinish(a)||"", note:(a.note||"").trim(), custom:!!c.custom};
+    return {scope:scope, area:a.name||"(unnamed)"+(a.sameAsTrim?" (matches Woodwork & trim)":""), colour:outName(c), code:c.code||"", finish:effectiveFinish(a)||"", note:(a.note||"").trim(), custom:!!c.custom};
   });
 }
 async function doSubmit(){
@@ -522,7 +543,6 @@ async function doSubmit(){
   try{ await saveSelection(rec); }catch(e){}
   showReceipt(rec);
 }
-
 function showReceipt(rec){
   var app=$("#app"); app.innerHTML="";
   app.appendChild(header());
@@ -538,7 +558,11 @@ function showReceipt(rec){
     var sum=el("div","sum");
     items.forEach(function(it){
       var row=el("div","r");
-      var bx=el("span","box"); var found=COLOURS.filter(function(c){return c.n===it.colour;})[0];
+      var bx=el("span","box");
+      var found=COLOURS.filter(function(c){
+        var full=(c.b?(c.b+" "):"")+c.n;
+        return c.n===it.colour || full===it.colour;
+      })[0];
       bx.style.background=found?found.h:"repeating-linear-gradient(45deg,#eee,#eee 4px,#fff 4px,#fff 8px)";
       row.appendChild(bx);
       var t=el("div","t"); t.innerHTML="<b>"+esc(it.area)+"</b><span>"+esc(it.colour)+(it.finish?(" · "+esc(it.finish)):"")+"</span>";
@@ -549,7 +573,6 @@ function showReceipt(rec){
   var ref=el("div","ref"); ref.textContent=rec.docket; r.appendChild(ref);
   wrap.appendChild(r); app.appendChild(wrap);
 }
-
 /* ====================== GO ====================== */
 (function initFromURL(){
   try{ var q=new URLSearchParams(location.search); var t=q.get("tab"); if(t&&["Interior","Exterior"].indexOf(t)>=0)tab=t; }catch(e){}
