@@ -203,6 +203,12 @@
   .cambtn{appearance:none;cursor:pointer;background:var(--card);border:1.5px dashed var(--line);border-radius:9px;padding:8px 13px;min-height:38px;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink-soft)}
   .cambtn:disabled{opacity:.6;cursor:default}
   .photothumb{width:54px;height:54px;object-fit:cover;border-radius:8px;border:1.5px solid var(--line);cursor:pointer;background:#EEE}
+  /* before photos - Taylor's shot of what needs doing. Bigger and amber so it
+     reads as an instruction, not as evidence. */
+  .photostrip.before{margin:2px 2px 13px;padding:9px 10px;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px}
+  .photostrip .plabel{width:100%;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#7A4A12;margin:0 0 2px 1px}
+  .photothumb.big{width:88px;height:88px;border-color:var(--amber-line);border-width:2px}
+  .cambtn.before{border-color:var(--amber-line);color:#7A4A12;background:#fff}
   .lightbox{position:fixed;inset:0;z-index:50;background:rgba(20,22,25,.92);display:flex;align-items:center;justify-content:center;padding:22px}
   .lightbox img{max-width:100%;max-height:100%;border-radius:10px}
   .lightbox .lb-close{position:fixed;top:14px;right:20px;color:#fff;font-size:34px;line-height:1;font-family:sans-serif;cursor:pointer}
@@ -1191,12 +1197,14 @@ async function toggleTouch(it){
   render();
   await tuSet({job:touchJob,type:"touchup",item:it.item,done:it.done,done_by:touchPerson||""});
 }
-async function addTouch(){
+// withPhoto: once the item saves, open the camera straight away for the before shot.
+async function addTouch(withPhoto){
   const txt=(tuAddText||"").trim(); if(!txt)return;
   if(!touchData.some(x=>x.type==="touchup"&&x.item.toLowerCase()===txt.toLowerCase()))
-    touchData.push({job:touchJob,type:"touchup",item:txt,done:false,done_by:"",done_at:"",supervisor:""});
+    touchData.push({job:touchJob,type:"touchup",item:txt,done:false,done_by:"",done_at:"",supervisor:"",photo:"",photo_before:""});
   tuAddText="";render();
   await tuSet({job:touchJob,type:"touchup",item:txt,done:false,done_by:touchPerson||""});
+  if(withPhoto) pickPhoto("touchup",txt,"before");
 }
 async function setFinish(stage,done,sup){
   pendingFinish=null;otherSup="";otherSupName="";
@@ -1233,18 +1241,20 @@ function fileToDataUrl(file,maxDim,quality){
   });
 }
 // Send a photo to the backend, which stores it in Drive and returns a view URL.
-async function tuPhoto(job,type,item,by,dataUrl){
+async function tuPhoto(job,type,item,by,dataUrl,slot){
   if(!liveBackend())return null;
   try{
     const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body:JSON.stringify({action:"photo",job:job,type:type,item:item,by:by,dataUrl:dataUrl})});
+      body:JSON.stringify({action:"photo",job:job,type:type,item:item,by:by,dataUrl:dataUrl,slot:slot||"after"})});
     const d=await r.json();
     return (d&&d.url)?d.url:null;
   }catch(e){return null;}
 }
 // Open the camera / photo picker for one touch-up or finishing item.
-function pickPhoto(type,item){
-  const key=type+"|"+item;
+// slot: "before" (the shot of what needs doing) or "after" (the done shot).
+function pickPhoto(type,item,slot){
+  slot=slot||"after";
+  const key=type+"|"+item+"|"+slot;
   const inp=document.createElement("input");
   inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
   inp.onchange=async()=>{
@@ -1253,11 +1263,12 @@ function pickPhoto(type,item){
     let ok=false;
     try{
       const dataUrl=await fileToDataUrl(file,1280,0.72);
-      const url=await tuPhoto(touchJob,type,item,touchPerson||"",dataUrl);
+      const url=await tuPhoto(touchJob,type,item,touchPerson||"",dataUrl,slot);
       if(url){
         let row=touchData.find(x=>x.type===type&&x.item===item);
-        if(!row){row={job:touchJob,type:type,item:item,done:false,done_by:"",done_at:"",supervisor:"",photo:""};touchData.push(row);}
-        row.photo=url;ok=true;
+        if(!row){row={job:touchJob,type:type,item:item,done:false,done_by:"",done_at:"",supervisor:"",photo:"",photo_before:""};touchData.push(row);}
+        if(slot==="before")row.photo_before=url; else row.photo=url;
+        ok=true;
       }
     }catch(e){}
     delete uploading[key];render();
@@ -1266,21 +1277,27 @@ function pickPhoto(type,item){
   inp.click();
 }
 // The little "Add photo" button + thumbnail shown under each item.
-function photoStrip(type,item,label){
+function photoStrip(type,item,slot,label){
   if(!PHOTOS_ENABLED) return el("span");
-  const noun=label||"photo";
-  const key=type+"|"+item;
+  slot=slot||"after";
+  const before=(slot==="before");
+  const noun=label||(before?"before photo":"photo");
+  const key=type+"|"+item+"|"+slot;
   const row=touchData.find(x=>x.type===type&&x.item===item);
-  const d=el("div","photostrip");
-  if(row&&row.photo){
-    const th=el("img","photothumb");th.src=row.photo;th.alt=noun;
-    th.onclick=()=>{lightbox=row.photo;render();};
+  const url=row?(before?(row.photo_before||""):(row.photo||"")):"";
+  // Only dress it up as a before panel once there is actually a photo on it,
+  // otherwise every untouched item shouts at the crew for nothing.
+  const d=el("div","photostrip"+(before&&url?" before":""));
+  if(before&&url) d.appendChild(el("div","plabel","Before - what needs doing"));
+  if(url){
+    const th=el("img","photothumb"+(before?" big":""));th.src=url;th.alt=noun;
+    th.onclick=()=>{lightbox=url;render();};
     d.appendChild(th);
   }
   const busy=!!uploading[key];
-  const cam=el("button","cambtn",busy?"⏳ Uploading…":((row&&row.photo)?("📷 Replace "+noun):("📷 Add "+noun)));
+  const cam=el("button","cambtn"+(before?" before":""),busy?"⏳ Uploading…":(url?("📷 Replace "+noun):("📷 Add "+noun)));
   if(busy)cam.disabled=true;
-  cam.onclick=()=>pickPhoto(type,item);
+  cam.onclick=()=>pickPhoto(type,item,slot);
   d.appendChild(cam);
   return d;
 }
@@ -1356,12 +1373,16 @@ function renderTouch(app){
   items.forEach(it=>{
     const t=el("button","tick"+(it.done?" on":""),"<span class='box'></span>"+escapeHtml(it.item)+(it.done&&it.done_by?" <small style='color:#8A8F97'>· "+escapeHtml(it.done_by)+"</small>":""));
     t.onclick=()=>toggleTouch(it);s.appendChild(t);
-    if(it.done) s.appendChild(photoStrip("touchup",it.item,"after photo"));
+    // The before photo shows whether the item is ticked or not. That is the point,
+    // the boys need to see it while the job is still outstanding.
+    s.appendChild(photoStrip("touchup",it.item,"before","before photo"));
+    if(it.done) s.appendChild(photoStrip("touchup",it.item,"after","after photo"));
   });
   const addWrap=el("div","field");addWrap.style.marginTop="10px";
   const ai=el("input");ai.type="text";ai.placeholder="Add a touch-up you spotted...";ai.value=tuAddText;ai.oninput=e=>{tuAddText=e.target.value;};
-  const ab=el("button","chip","+ Add");ab.style.marginTop="8px";ab.onclick=()=>addTouch();
-  addWrap.appendChild(ai);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
+  const abp=el("button","chip","📷 Add & take before photo");abp.style.marginTop="8px";abp.onclick=()=>addTouch(true);
+  const ab=el("button","chip","+ Add only");ab.style.marginTop="8px";ab.style.marginLeft="8px";ab.onclick=()=>addTouch(false);
+  addWrap.appendChild(ai);addWrap.appendChild(abp);addWrap.appendChild(ab);s.appendChild(addWrap);pad.appendChild(s);
 
   wrap.appendChild(pad);app.appendChild(wrap);
 }
