@@ -1,0 +1,588 @@
+<!-- TJP House Visualiser
+     Standalone page. Single file, no build step, vanilla JS — same pattern as
+     tjp-colours.html and index.html so it drops straight into the tjp-eod repo.
+
+     Client uploads a photo of their house, the AI repaints it in the colours
+     they've chosen, and they get a before/after slider.
+
+     >>> BACKEND SWAP POINT <<<  set API_URL below to the /exec URL of the
+     "TJP Visualiser Backend" Apps Script deployment. Nothing else to change.
+
+     COLOURS: this page does not carry its own colour book. Colours arrive one
+     of two ways:
+       1. Deep link from the colour selection app (preferred) — see LINK CONTRACT
+          at the bottom of this file.
+       2. The client picks manually, using PALETTE below plus a free hex picker.
+     PALETTE is a PLACEHOLDER — replace it with the real values out of the
+     COLOURS array in tjp-colours.html so the two apps can't drift apart. -->
+<!doctype html>
+<html lang="en-AU">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>See it on your house — TJP</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --paper:#ECEAE3; --card:#FFFFFF;
+    --ink:#1C1F22; --ink-soft:#5C616A; --ink-faint:#8A8F97;
+    --line:#DCD8CE; --line-soft:#ECE9E1;
+    --green:#1C7A4B; --green-soft:#E7F1EB; --green-line:#BFE0CC;
+    --amber:#B86C12; --amber-soft:#FAEEDB; --amber-line:#EBCB97;
+    --band:#22282E; --radius:11px; --tap:48px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+       font-family:'Inter',system-ui,-apple-system,sans-serif;
+       font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:560px;margin:0 auto;padding:0 0 90px}
+
+  /* header */
+  .band{background:var(--band);color:#fff;padding:18px 20px 16px}
+  .band-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .mark{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;
+        letter-spacing:.04em;line-height:1;text-transform:uppercase}
+  .mark small{display:block;font-size:11px;font-weight:600;letter-spacing:.22em;
+              color:#A9B0B8;margin-top:5px}
+  .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;
+          text-align:right;line-height:1.6;white-space:nowrap}
+  .lede{padding:16px 20px 0;color:var(--ink-soft);font-size:15px}
+
+  .pad{padding:20px 16px 0}
+  .sect{margin-bottom:20px}
+  .h{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px;
+     letter-spacing:.03em;margin:0 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+
+  /* photo drop */
+  .drop{border:1.5px dashed var(--line);border-radius:var(--radius);background:var(--card);
+        padding:26px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+  .drop:hover,.drop.over{border-color:var(--green);background:var(--green-soft)}
+  .drop b{display:block;font-size:16px;margin-bottom:4px}
+  .drop span{color:var(--ink-faint);font-size:13px}
+  .shot{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line)}
+  .shot img{display:block;width:100%}
+  .shot button{position:absolute;top:8px;right:8px;border:0;border-radius:7px;
+               background:rgba(28,31,34,.82);color:#fff;font-size:13px;padding:7px 11px;cursor:pointer}
+
+  /* colour rows */
+  .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+  .row:last-of-type{border-bottom:0}
+  .sw{width:32px;height:32px;border-radius:7px;border:1px solid rgba(0,0,0,.16);flex:0 0 auto}
+  .row .who{flex:1;min-width:0}
+  .row .who b{display:block;font-size:15px;font-weight:600}
+  .row .who span{display:block;font-size:13px;color:var(--ink-faint);
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .x{border:0;background:transparent;color:var(--ink-faint);font-size:20px;
+     line-height:1;padding:6px 4px;cursor:pointer}
+  .x:hover{color:var(--ink)}
+
+  select,input[type=text]{width:100%;min-height:var(--tap);padding:10px 12px;
+    border:1px solid var(--line);border-radius:9px;background:var(--card);
+    color:var(--ink);font:inherit;font-size:15px}
+  input[type=color]{width:52px;height:var(--tap);padding:2px;border:1px solid var(--line);
+    border-radius:9px;background:var(--card);cursor:pointer}
+  .add{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .add .full{grid-column:1 / -1}
+  .add-row{display:flex;gap:8px;align-items:center}
+
+  button.btn{width:100%;min-height:54px;border:0;border-radius:10px;background:var(--band);
+    color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px;
+    letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+  button.btn:disabled{background:#B9BDC2;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+
+  /* the reveal — the one place this page gets loud */
+  .reveal{position:relative;border-radius:var(--radius);overflow:hidden;
+          border:1px solid var(--line);background:#000;touch-action:none;user-select:none}
+  .reveal img{display:block;width:100%;pointer-events:none}
+  /* The "after" sits exactly on top of the "before" and is revealed with
+     clip-path. Cropping by container width (the obvious approach) squashes the
+     image, because the inner img then inherits the shrunken width. */
+  .reveal .after{position:absolute;inset:0}
+  .reveal .after img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;
+          box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:ew-resize}
+  .handle::after{content:'';position:absolute;top:50%;left:50%;width:38px;height:38px;
+    margin:-19px 0 0 -19px;border-radius:50%;background:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .handle::before{content:'‹ ›';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:2;font-size:17px;color:var(--band);letter-spacing:2px}
+  .tags{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+        font-size:11px;color:var(--ink-faint);padding:7px 2px 0}
+
+  /* states */
+  .working{text-align:center;padding:30px 18px;background:var(--card);
+           border:1px solid var(--line);border-radius:var(--radius)}
+  .bar{height:6px;background:var(--line-soft);border-radius:4px;overflow:hidden;margin:14px 0 10px}
+  .bar i{display:block;height:100%;width:0;background:var(--green);border-radius:4px;
+         transition:width .5s linear}
+  .working p{margin:0;color:var(--ink-soft);font-size:14px}
+  .err{background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--radius);
+       padding:13px 14px;font-size:14px;color:#6E4208}
+  .err b{display:block;margin-bottom:3px}
+
+  /* the disclaimer — permanent, not dismissable */
+  .note{background:var(--amber-soft);border:1px solid var(--amber-line);
+        border-radius:var(--radius);padding:13px 14px;font-size:13.5px;line-height:1.5;color:#6E4208}
+  .note b{display:block;margin-bottom:3px;font-size:14px}
+  .foot{padding:18px 16px 0;color:var(--ink-faint);font-size:12.5px;line-height:1.55}
+  .count{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-faint);
+         text-align:center;margin-top:9px}
+  .hide{display:none !important}
+  :focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+
+<div class="wrap">
+
+  <div class="band">
+    <div class="band-top">
+      <div class="mark">TJP<small>House visualiser</small></div>
+      <div class="docket">TAYLOR JOHNSTON<br>PAINTING<br><b id="dkt">—</b></div>
+    </div>
+  </div>
+
+  <p class="lede">Upload a photo of your place and we'll show you roughly how it
+  looks in the colours you've chosen.</p>
+
+  <div class="pad">
+
+    <!-- 1. photo -->
+    <div class="sect">
+      <h2 class="h">Your photo</h2>
+      <div id="dropZone" class="drop" tabindex="0" role="button">
+        <b>Add a photo</b>
+        <span>Front on, in daylight, whole house in frame</span>
+      </div>
+      <div id="shot" class="shot hide">
+        <img id="shotImg" alt="Your house">
+        <button type="button" id="reshoot">Change</button>
+      </div>
+      <input type="file" id="file" accept="image/*" class="hide">
+    </div>
+
+    <!-- 2. colours -->
+    <div class="sect">
+      <h2 class="h">Colours</h2>
+      <div class="card">
+        <div id="rows"></div>
+        <p id="empty" class="lede" style="padding:4px 0;font-size:14px">
+          Nothing chosen yet. Add a surface below.</p>
+
+        <div class="add">
+          <select id="areaSel" class="full" aria-label="Surface"></select>
+          <select id="palSel" aria-label="Colour"></select>
+          <div class="add-row">
+            <input type="color" id="hexPick" value="#7A8288" aria-label="Custom colour">
+            <input type="text" id="nameIn" placeholder="Colour name" aria-label="Colour name">
+          </div>
+          <button type="button" id="addBtn" class="btn ghost full"
+                  style="min-height:46px;font-size:16px">Add this surface</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. go -->
+    <div class="sect">
+      <button type="button" id="go" class="btn" disabled>Show me</button>
+      <p id="count" class="count"></p>
+    </div>
+
+    <!-- working -->
+    <div id="working" class="sect hide">
+      <div class="working">
+        <div class="bar"><i id="barFill"></i></div>
+        <p id="workMsg">Sending your photo…</p>
+      </div>
+    </div>
+
+    <!-- error -->
+    <div id="errBox" class="sect hide"><div class="err">
+      <b id="errTitle">That didn't work</b>
+      <span id="errMsg"></span>
+    </div></div>
+
+    <!-- result -->
+    <div id="result" class="sect hide">
+      <h2 class="h">Before and after</h2>
+      <div id="reveal" class="reveal">
+        <img id="beforeImg" alt="Your house before">
+        <div class="after"><img id="afterImg" alt="Your house in the new colours"></div>
+        <div class="handle" id="handle" tabindex="0" role="slider"
+             aria-label="Slide to compare before and after"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
+      </div>
+      <div class="tags"><span>NOW</span><span>PAINTED</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button type="button" id="save" class="btn ghost" style="min-height:46px;font-size:16px">Save image</button>
+        <button type="button" id="again" class="btn ghost" style="min-height:46px;font-size:16px">Try other colours</button>
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="note">
+        <b>Indicative only</b>
+        This is a computer-generated impression, not a colour match. Screen
+        colours, photo lighting and the AI's interpretation all shift the result.
+        Always confirm your final colours from a physical sample or a painted
+        sample pot before work starts — what you see here isn't what you're
+        signing up for.
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    Your photo is sent to Google's Gemini service to produce the image, and a
+    copy is kept by TJP so we can check the result. It isn't published anywhere
+    or used for anything else.
+  </p>
+</div>
+
+<script>
+/* ====================== CONFIG ====================== */
+
+// >>> BACKEND SWAP POINT <<<
+const API_URL = "https://script.google.com/macros/s/AKfycbyG0Uj9MKKmEdNdPQEEu8V_ktuAn0fhzOWlvx2fbKjANtCk7bz3PFPSf98Eb00uMebsOg/exec";
+
+// Surfaces. These are DEFAULT_EXTERIOR from tjp-colours.html, word for word.
+// Shown in the manual picker only — deep-linked areas are accepted whatever
+// they're called, because clients can rename areas and add their own.
+const AREAS = [
+  "Roof", "Weatherboards / render", "Eaves & fascia", "Gutters & downpipes",
+  "Window frames", "Doors", "Garage door"
+];
+
+/* Colour book, copied from the COLOURS array in tjp-colours.html.
+   Same field names, so this can be re-pasted straight over when that list
+   changes:  g=group  n=name  c=Dulux code  h=hex  b=brand  x=exterior only
+   Hex values are indicative on-screen swatches, not colour-true. */
+const PALETTE = [
+  {g:"Whites & off-whites", n:"Vivid White", c:"W01A", h:"#F4F3EE"},
+  {g:"Whites & off-whites", n:"Natural White", c:"W16", h:"#EFE9DA"},
+  {g:"Whites & off-whites", n:"Whisper White", c:"SN1F2", h:"#ECE8DB"},
+  {g:"Whites & off-whites", n:"Lexicon Quarter", c:"PG1H9", h:"#F1F2ED"},
+  {g:"Whites & off-whites", n:"White on White", c:"PG1D9", h:"#EEEDE3"},
+  {g:"Whites & off-whites", n:"Antique White U.S.A.", c:"W22", h:"#E4DDC9"},
+  {g:"Whites & off-whites", n:"Casper White Quarter", c:"ST1E3", h:"#E5E5DD"},
+  {g:"Whites & off-whites", n:"Terrace White", c:"SN2D2", h:"#E8E3D4"},
+  {g:"Warm neutrals", n:"Hog Bristle Quarter", c:"SN3E2", h:"#DBD3BE"},
+  {g:"Warm neutrals", n:"Hog Bristle Half", c:"SN3E3", h:"#D2C8AE"},
+  {g:"Warm neutrals", n:"Ticking", c:"SN2E4", h:"#C9C2B2"},
+  {g:"Warm neutrals", n:"Beige Royal", c:"S0Y10", h:"#C7B99C"},
+  {g:"Warm neutrals", n:"Linseed", c:"SN3F3", h:"#C6BA9F"},
+  {g:"Greys", n:"Grey Pail", c:"SN1E1", h:"#CDCBC0"},
+  {g:"Greys", n:"Timeless Grey", c:"SN1F4", h:"#B7B2A7"},
+  {g:"Greys", n:"Tranquil Retreat", c:"SN1G4", h:"#BFC1B8"},
+  {g:"Greys", n:"Milton Moon", c:"SN1G6", h:"#9A968B"},
+  {g:"Greys", n:"Klavier", c:"SN4F5", h:"#8C8B85"},
+  {g:"Greys", n:"Dieskau", c:"SN4F8", h:"#6E6F6A"},
+  {g:"Greens & muted", n:"Wilderness", c:"G23", h:"#9BA08C"},
+  {g:"Greens & muted", n:"Highgate", c:"SN2H8", h:"#6D7469"},
+  {g:"Greens & muted", n:"Oolong", c:"SN5F4", h:"#8E8B7C"},
+  {g:"Greens & muted", n:"Rockcress", c:"SN2G6", h:"#7F8676"},
+  {g:"Darks & charcoals", n:"Western Myall", c:"SN4H1", h:"#4B4844"},
+  {g:"Darks & charcoals", n:"Namadji", c:"SN4H8", h:"#3B3C3D"},
+  {g:"Darks & charcoals", n:"Domino", c:"SN4G9", h:"#34383B"},
+  {g:"Darks & charcoals", n:"Black", c:"PN1N9", h:"#1D1D1D"},
+  {g:"Colorbond — classic", n:"Dover White", c:"", h:"#F9FBF1", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Surfmist", c:"", h:"#E4E2D5", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Southerly", c:"", h:"#D2D1CB", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Classic Cream", c:"", h:"#E9DCB8", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Paperbark", c:"", h:"#CABFA4", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Evening Haze", c:"", h:"#C5C2AA", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Shale Grey", c:"", h:"#BDBFBA", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Dune", c:"", h:"#B1ADA3", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Bluegum", c:"", h:"#969799", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Windspray", c:"", h:"#888B8A", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Gully", c:"", h:"#857E73", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Wallaby", c:"", h:"#7F7C78", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Pale Eucalypt", c:"", h:"#7C846A", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Jasper", c:"", h:"#6C6153", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Basalt", c:"", h:"#6D6C6E", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Manor Red", c:"", h:"#5E1D0E", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Woodland Grey", c:"", h:"#4B4C46", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Cottage Green", c:"", h:"#304C3C", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Deep Ocean", c:"", h:"#364152", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Ironstone", c:"", h:"#3E434C", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Monument", c:"", h:"#323233", b:"Colorbond", x:true},
+  {g:"Colorbond — classic", n:"Night Sky", c:"", h:"#131313", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Surfmist Matt", c:"", h:"#EAE9E0", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Shale Grey Matt", c:"", h:"#C6C9C4", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Dune Matt", c:"", h:"#BDB3A7", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Bluegum Matt", c:"", h:"#969B9B", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Basalt Matt", c:"", h:"#5F615D", b:"Colorbond", x:true},
+  {g:"Colorbond — matt", n:"Monument Matt", c:"", h:"#292E2A", b:"Colorbond", x:true}
+];
+
+const MAX_RENDERS = 8;      // matches MAX_PER_SESSION in the backend
+const MAX_EDGE    = 1280;   // downscale before upload
+
+/* ====================== STATE ====================== */
+
+const state = { photo:null, picks:[], renders:0, busy:false,
+                session: Math.random().toString(36).slice(2, 10) };
+
+const $ = id => document.getElementById(id);
+
+/* ====================== SETUP ====================== */
+
+$("dkt").textContent = new Date().toLocaleDateString("en-AU",
+  { day:"2-digit", month:"short" }).toUpperCase();
+
+AREAS.forEach(a => $("areaSel").add(new Option(a, a)));
+$("palSel").add(new Option("Pick from the list…", ""));
+// Grouped, because the list is long enough now that a flat dropdown is painful.
+[...new Set(PALETTE.map(c => c.g))].forEach(g => {
+  const og = document.createElement("optgroup");
+  og.label = g;
+  PALETTE.forEach((c, i) => {
+    if (c.g !== g) return;
+    const o = new Option(label(c), String(i));
+    og.appendChild(o);
+  });
+  $("palSel").appendChild(og);
+});
+
+function label(c){ return (c.b ? c.b + " " : "") + c.n; }
+
+/* ---- photo ---- */
+$("dropZone").onclick = () => $("file").click();
+$("dropZone").onkeydown = e => { if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click();} };
+$("reshoot").onclick = () => $("file").click();
+$("file").onchange = () => { if($("file").files[0]) loadPhoto($("file").files[0]); };
+
+["dragenter","dragover"].forEach(ev =>
+  $("dropZone").addEventListener(ev, e => { e.preventDefault(); $("dropZone").classList.add("over"); }));
+["dragleave","drop"].forEach(ev =>
+  $("dropZone").addEventListener(ev, e => { e.preventDefault(); $("dropZone").classList.remove("over"); }));
+$("dropZone").addEventListener("drop", e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadPhoto(f);
+});
+
+// Downscale + compress so uploads stay small — same approach as the EOD app.
+function loadPhoto(file){
+  if (!/^image\//.test(file.type)) return fail("That file isn't an image.", "Pick a JPG or PNG photo.");
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const s = Math.min(1, MAX_EDGE / Math.max(w, h));
+    w = Math.round(w * s); h = Math.round(h * s);
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    cv.getContext("2d").drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    state.photo = cv.toDataURL("image/jpeg", 0.85);
+    $("shotImg").src = state.photo;
+    $("shot").classList.remove("hide");
+    $("dropZone").classList.add("hide");
+    clearErr(); sync();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); fail("Couldn't read that photo.", "Try a different one."); };
+  img.src = url;
+}
+
+/* ---- colours ---- */
+$("palSel").onchange = () => {
+  const i = $("palSel").value;
+  if (i === "") return;
+  const c = PALETTE[+i];
+  $("hexPick").value = c.h;
+  $("nameIn").value  = label(c);
+};
+
+$("addBtn").onclick = () => {
+  const area = $("areaSel").value;
+  const hex  = $("hexPick").value;
+  const name = ($("nameIn").value || "").trim();
+  if (!name) return fail("This colour needs a name.",
+    "Pick one from the list, or type the name so we get it right at the paint shop.");
+  state.picks = state.picks.filter(p => p.area !== area);   // one colour per surface
+  state.picks.push({ area, name, hex });
+  $("nameIn").value = ""; $("palSel").value = "";
+  clearErr(); drawRows(); sync();
+};
+
+function drawRows(){
+  const box = $("rows");
+  box.innerHTML = "";
+  state.picks.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const sw = document.createElement("div");
+    sw.className = "sw"; sw.style.background = p.hex;
+    const who = document.createElement("div");
+    who.className = "who";
+    who.innerHTML = "<b></b><span></span>";
+    who.querySelector("b").textContent = p.area;
+    who.querySelector("span").textContent = p.name;
+    const x = document.createElement("button");
+    x.className = "x"; x.type = "button"; x.textContent = "×";
+    x.setAttribute("aria-label", "Remove " + p.area);
+    x.onclick = () => { state.picks.splice(i,1); drawRows(); sync(); };
+    row.append(sw, who, x);
+    box.appendChild(row);
+  });
+  $("empty").classList.toggle("hide", state.picks.length > 0);
+}
+
+function sync(){
+  const left = MAX_RENDERS - state.renders;
+  $("go").disabled = state.busy || !state.photo || !state.picks.length || left <= 0;
+  $("count").textContent = state.renders
+    ? (left > 0 ? left + " more to go" : "That's the limit for now — give us a call and we'll run more")
+    : "";
+}
+
+/* ====================== RENDER ====================== */
+
+const MSGS = ["Sending your photo…", "Masking the surfaces…",
+              "Laying the colour on…", "Matching the light and shadows…",
+              "Almost there…"];
+
+$("go").onclick = render;
+$("again").onclick = () => {
+  $("result").classList.add("hide");
+  window.scrollTo({ top:0, behavior:"smooth" });
+};
+
+async function render(){
+  if (state.busy) return;
+  if (API_URL.indexOf("PASTE_YOUR") === 0)
+    return fail("Not connected yet.", "The visualiser backend hasn't been linked up.");
+
+  state.busy = true; clearErr();
+  $("result").classList.add("hide");
+  $("working").classList.remove("hide");
+  sync();
+
+  let step = 0;
+  $("workMsg").textContent = MSGS[0];
+  $("barFill").style.width = "6%";
+  const tick = setInterval(() => {
+    step = Math.min(step + 1, MSGS.length - 1);
+    $("workMsg").textContent = MSGS[step];
+    $("barFill").style.width = (10 + step * 20) + "%";
+  }, 3500);
+
+  try {
+    // text/plain dodges the CORS preflight Apps Script can't answer.
+    const r = await fetch(API_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action:"render", session:state.session,
+        photo:state.photo, areas:state.picks
+      })
+    });
+    const d = await r.json();
+
+    clearInterval(tick);
+    $("barFill").style.width = "100%";
+
+    if (!d.ok || !d.image) {
+      showFail(d.error || "The image didn't come back.", d.detail);
+    } else {
+      state.renders++;
+      $("beforeImg").src = state.photo;
+      $("afterImg").src  = d.image;
+      $("result").classList.remove("hide");
+      setSplit(0.5);
+      requestAnimationFrame(() =>
+        $("result").scrollIntoView({ behavior:"smooth", block:"start" }));
+    }
+  } catch (err) {
+    clearInterval(tick);
+    showFail("Couldn't reach the visualiser.", "Check your signal and try again.");
+  }
+
+  $("working").classList.add("hide");
+  $("barFill").style.width = "0";
+  state.busy = false;
+  sync();
+}
+
+function showFail(msg, detail){
+  fail("That didn't work", detail ? msg + " " + detail : msg);
+}
+function fail(title, msg){
+  $("errTitle").textContent = title;
+  $("errMsg").textContent = msg || "";
+  $("errBox").classList.remove("hide");
+}
+function clearErr(){ $("errBox").classList.add("hide"); }
+
+/* ---- before/after slider ---- */
+const reveal = $("reveal"), after = reveal.querySelector(".after");
+
+let split = 0.5;
+
+function setSplit(f){
+  split = Math.max(0, Math.min(1, f));
+  const pct = split * 100;
+  // Clip from the right so the after image keeps its own full width.
+  after.style.clipPath = "inset(0 " + (100 - pct) + "% 0 0)";
+  $("handle").style.left = pct + "%";
+  $("handle").setAttribute("aria-valuenow", Math.round(pct));
+}
+
+$("handle").addEventListener("keydown", e => {
+  const step = e.shiftKey ? 0.1 : 0.02;
+  if (e.key === "ArrowLeft")  { setSplit(split - step); e.preventDefault(); }
+  if (e.key === "ArrowRight") { setSplit(split + step); e.preventDefault(); }
+  if (e.key === "Home")       { setSplit(0); e.preventDefault(); }
+  if (e.key === "End")        { setSplit(1); e.preventDefault(); }
+});
+function fromEvent(e){
+  const r = reveal.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  setSplit(x / r.width);
+}
+let dragging = false;
+["mousedown","touchstart"].forEach(ev =>
+  reveal.addEventListener(ev, e => { dragging = true; fromEvent(e); }, {passive:true}));
+["mousemove","touchmove"].forEach(ev =>
+  window.addEventListener(ev, e => { if (dragging) fromEvent(e); }, {passive:true}));
+["mouseup","touchend"].forEach(ev =>
+  window.addEventListener(ev, () => { dragging = false; }));
+
+/* ---- save ---- */
+$("save").onclick = () => {
+  const a = document.createElement("a");
+  a.href = $("afterImg").src;
+  a.download = "TJP-visualiser-" + Date.now() + ".png";
+  a.click();
+};
+
+/* ====================== LINK CONTRACT ======================
+   The colour selection app deep-links in with the client's picks:
+
+     tjp-visualiser.html?c=Walls~Monument~323539~Colorbond|Roof~Surfmist~E4E2D5~Colorbond
+
+   Each pick is  area~name~hex(no #)~brand(optional),  picks joined with "|",
+   the whole value URL-encoded. Unknown areas are ignored so the two apps can
+   drift a little without breaking.
+   ========================================================== */
+(function readLink(){
+  const raw = new URLSearchParams(location.search).get("c");
+  if (!raw) { drawRows(); sync(); return; }
+  raw.split("|").forEach(chunk => {
+    const [area, name, hex, brand] = chunk.split("~");
+    if (!area || !name || !hex) return;
+    // No whitelist. Clients rename areas and add their own in the colour app,
+    // so an unrecognised name is normal — surfacePhrase() in the backend falls
+    // back to using it verbatim.
+    // One colour per surface, same rule as adding by hand.
+    state.picks = state.picks.filter(p => p.area !== area);
+    state.picks.push({
+      area, hex: "#" + hex.replace("#",""),
+      name: (brand ? brand + " " : "") + name
+    });
+  });
+  drawRows(); sync();
+})();
+</script>
+</html>
