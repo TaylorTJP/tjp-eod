@@ -128,6 +128,10 @@
   .note{background:var(--amber-soft);border:1px solid var(--amber-line);
         border-radius:var(--radius);padding:13px 14px;font-size:13.5px;line-height:1.5;color:#6E4208}
   .note b{display:block;margin-bottom:3px;font-size:14px}
+  .send{background:var(--green-soft);border:1px solid var(--green-line);
+        border-radius:var(--radius);padding:13px 14px;font-size:13.5px;
+        line-height:1.5;color:#125634;margin-top:12px}
+  .send b{display:block;margin-bottom:3px;font-size:14px}
   .foot{padding:18px 16px 0;color:var(--ink-faint);font-size:12.5px;line-height:1.55}
   .count{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-faint);
          text-align:center;margin-top:9px}
@@ -219,6 +223,13 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
         <button type="button" id="save" class="btn ghost" style="min-height:46px;font-size:16px">Save image</button>
         <button type="button" id="again" class="btn ghost" style="min-height:46px;font-size:16px">Try other colours</button>
+      </div>
+
+      <div class="send">
+        <b>Send it through</b>
+        This render doesn't go anywhere near your colour selection form — it
+        stops here. If you want Taylor to see it, save or screenshot it and
+        text it through with the colours you've landed on.
       </div>
     </div>
 
@@ -403,8 +414,24 @@ $("addBtn").onclick = () => {
   state.picks = state.picks.filter(p => p.area !== area);   // one colour per surface
   state.picks.push({ area, name, hex });
   $("nameIn").value = ""; $("palSel").value = "";
-  clearErr(); drawRows(); sync();
+  clearErr(); drawRows(); refreshAreas(); sync();
 };
+
+/* Marks off the surfaces already chosen and moves the dropdown to the next one
+   that isn't. Without this the dropdown stays put, so a second "add" lands on
+   the same surface and replaces the first pick instead of adding to it. */
+function refreshAreas(){
+  const used = state.picks.map(p => p.area);
+  const sel = $("areaSel");
+  const keep = sel.value;
+  sel.innerHTML = "";
+  AREAS.forEach(a => {
+    const o = new Option((used.indexOf(a) > -1 ? "✓ " : "") + a, a);
+    sel.appendChild(o);
+  });
+  const next = AREAS.find(a => used.indexOf(a) === -1);
+  sel.value = next || keep;
+}
 
 function drawRows(){
   const box = $("rows");
@@ -422,7 +449,7 @@ function drawRows(){
     const x = document.createElement("button");
     x.className = "x"; x.type = "button"; x.textContent = "×";
     x.setAttribute("aria-label", "Remove " + p.area);
-    x.onclick = () => { state.picks.splice(i,1); drawRows(); sync(); };
+    x.onclick = () => { state.picks.splice(i,1); drawRows(); refreshAreas(); sync(); };
     row.append(sw, who, x);
     box.appendChild(row);
   });
@@ -523,8 +550,9 @@ let split = 0.5;
 function setSplit(f){
   split = Math.max(0, Math.min(1, f));
   const pct = split * 100;
-  // Clip from the right so the after image keeps its own full width.
-  after.style.clipPath = "inset(0 " + (100 - pct) + "% 0 0)";
+  // Reveal from the right, so the painted image grows from the PAINTED label.
+  // Clipping from the left put the new colours under the "NOW" caption.
+  after.style.clipPath = "inset(0 0 0 " + pct + "%)";
   $("handle").style.left = pct + "%";
   $("handle").setAttribute("aria-valuenow", Math.round(pct));
 }
@@ -568,7 +596,7 @@ $("save").onclick = () => {
    ========================================================== */
 (function readLink(){
   const raw = new URLSearchParams(location.search).get("c");
-  if (!raw) { drawRows(); sync(); return; }
+  if (!raw) { drawRows(); refreshAreas(); sync(); return; }
   raw.split("|").forEach(chunk => {
     const [area, name, hex, brand] = chunk.split("~");
     if (!area || !name || !hex) return;
@@ -582,7 +610,7 @@ $("save").onclick = () => {
       name: (brand ? brand + " " : "") + name
     });
   });
-  drawRows(); sync();
+  drawRows(); refreshAreas(); sync();
 })();
 </script>
 </html>
