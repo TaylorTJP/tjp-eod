@@ -326,6 +326,9 @@ function ownersWayToday(){
 }
 // A real answer, not a grunt.
 function ownersWayAnswered(){return (f.appr.deepAnswer||"").trim().length>=20;}
+// Same idea for the job update. It runs the schedule, so a full stop is not an update.
+const JOB_UPDATE_MIN = 25;
+function jobUpdateOK(){return (f.jobUpdate||"").trim().length>=JOB_UPDATE_MIN;}
 
 const CLEAN = [
   {key:"neverhere", t:"Site left like we were never here", primary:true},
@@ -772,7 +775,7 @@ function progress(){
   total++;if(f.worker)done++;
   total++;if(jobOK())done++;
   total++;if(f.workDone.trim())done++;
-  total++;if(f.jobUpdate.trim())done++;
+  total++;if(jobUpdateOK())done++;
   if(isAppr()){total++;if(ownersWayAnswered())done++;}
   total++;if(Object.values(f.prep).some(Boolean))done++;
   FLAGS.forEach(fl=>{total++;if(flagComplete(fl))done++;});
@@ -874,7 +877,14 @@ function crewForm(){
   s.appendChild(co);
   fld=el("div","field");
   const ju=el("textarea");ju.value=f.jobUpdate;ju.placeholder="Where's the job up to? Finished / nearly finished / still to go — and anything that shifts the timeline.";
-  ju.oninput=e=>{f.jobUpdate=e.target.value;updateProgress();updateSend();};fld.appendChild(ju);s.appendChild(fld);
+  const juHint=el("div","hint");
+  const juTick=()=>{
+    const n=(f.jobUpdate||"").trim().length;
+    juHint.textContent = n>=JOB_UPDATE_MIN ? "" : (n===0 ? "" : "A bit more detail — "+(JOB_UPDATE_MIN-n)+" more characters.");
+    juHint.style.display = juHint.textContent ? "block" : "none";
+  };
+  ju.oninput=e=>{f.jobUpdate=e.target.value;juTick();updateProgress();updateSend();};
+  fld.appendChild(ju);juTick();fld.appendChild(juHint);s.appendChild(fld);
   const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work <small style='color:#8A8F97'>(photos help the job update x10)</small>");
   ph.onclick=()=>{f.photos=!f.photos;render();};s.appendChild(ph);
   pad.appendChild(s);
@@ -997,7 +1007,7 @@ function updateProgress(){const fill=$(".coverage-fill");if(fill)fill.style.widt
 function updateSend(){const b=$(".send");if(b)b.disabled=!canSend();}
 function canSend(){
   return f.worker&&jobOK()
-    &&f.jobUpdate.trim()
+    &&jobUpdateOK()
     &&(!isAppr()||ownersWayAnswered())
     &&FLAGS.every(flagComplete)
     &&PACK_ALL.every(packAnswered);
@@ -1011,6 +1021,7 @@ function submitBar(){
   if(!f.worker)missing="Tap your name to start";
   else if(!jobOK())missing="Pick which job you were on";
   else if(!f.jobUpdate.trim())missing="Add your job update — Taylor & Michael schedule off it";
+  else if(!jobUpdateOK())missing="Job update is too short — a sentence, not a couple of words";
   else if(isAppr()&&!ownersWayAnswered())missing="Answer today's owner's way question — a proper sentence, not a grunt";
   else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.extra&&!(num(s.hours)>0);}))missing="Add the hours on your flagged extras";
   else if(FLAGS.some(fl=>f.flags[fl.key].on&&!f.flags[fl.key].note.trim()))missing="Add a note to your flagged items";
