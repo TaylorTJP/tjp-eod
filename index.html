@@ -207,7 +207,7 @@
      reads as an instruction, not as evidence. */
   .photostrip.before{margin:2px 2px 13px;padding:9px 10px;background:var(--amber-soft);border:1.5px solid var(--amber-line);border-radius:10px}
   .photostrip .plabel{width:100%;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#7A4A12;margin:0 0 2px 1px}
-  .photothumb.big{width:88px;height:88px;border-color:var(--amber-line);border-width:2px}
+  .photothumb.big{width:88px;height:88px;border-color:var(--amber-line);border-width:2px} .phint{width:100%;font-size:11px;color:#8A8F97;margin:1px 0 0 1px}
   .cambtn.before{border-color:var(--amber-line);color:#7A4A12;background:#fff}
   .lightbox{position:fixed;inset:0;z-index:50;background:rgba(20,22,25,.92);display:flex;align-items:center;justify-content:center;padding:22px}
   .lightbox img{max-width:100%;max-height:100%;border-radius:10px}
@@ -269,12 +269,12 @@ const ORDER_CUTOFF_MIN = 15*60 + 45; // 3:45pm
 // Jobs tab can't be reached). On load the app fetches the live job names from
 // the Apps Script and replaces this. Keep these matching the Jobs tab format.
 let JOBS = [
-  "Grant Mullen - 3 Churinga Waters Drive, Old Beach",
-  "Barbara Beckett - 289 Sandy Bay Road, Sandy Bay",
-  "Hristo Behrakis - 62A Queen St, Sandy Bay",
-  "Southbuilt Construction - 26 Cherokee Drive, Cambridge",
-  "Southern Building - 192 Tollard Drive, Rokeby",
-  "Strata Complete - Lynn Stratton - 13 Beechworth Road, Sandy Bay",
+  "289 Sandy Bay Road, Sandy Bay (Barbara Beckett)",
+  "13 Beechworth Road, Sandy Bay (Strata Complete, Lynn Stratton)",
+  "192 Tollard Drive, Rokeby (Southern Building)",
+  "26 Cherokee Drive, Cambridge (Southbuilt Construction)",
+  "62A Queen St, Sandy Bay (Hristo Behrakis)",
+  "3 Churinga Waters Drive, Old Beach (Grant Mullen)",
 ];
 
 const PREP = ["Scrape & sand","Fill & sand","Tape & mask","Wash down","Prime / seal","Undercoat","Top coats"];
@@ -432,9 +432,9 @@ function flattenRec(rec){
   return {
     date:rec.date, time:rec.time, docket:rec.docket,
     worker:rec.worker, role:rec.role, job:rec.job, jobListed:rec.jobListed,
-    tasks:rec.workDone, jobUpdate:rec.jobUpdate, prep:(rec.prep||[]).join(", "), photos:rec.photos,
-    makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note, makegood_who:fl.makegood.who||"", makegood_materials:fl.makegood.materials||"", makegood_photo:fl.makegood.photo?"Yes":"",
-    variation_hrs:fl.variation.hours, variation_note:fl.variation.note, variation_who:fl.variation.who||"", variation_materials:fl.variation.materials||"",
+    tasks:rec.workDone, jobUpdate:rec.jobUpdate, prep:(rec.prep||[]).join(", "), photos:rec.photos, progress_photo:(rec.photoUrls||[]).join(" "),
+    makegood_hrs:fl.makegood.hours, makegood_note:fl.makegood.note, makegood_who:fl.makegood.who||"", makegood_materials:fl.makegood.materials||"", makegood_photo:fl.makegood.photo?"Yes":"", makegood_photo_urls:(fl.makegood.photoUrls||[]).join(" "),
+    variation_hrs:fl.variation.hours, variation_note:fl.variation.note, variation_who:fl.variation.who||"", variation_materials:fl.variation.materials||"", variation_photo_urls:(fl.variation.photoUrls||[]).join(" "),
     holdup_hrs:fl.holdup.hours||0, holdup_note:fl.holdup.note, materials_note:fl.materials.note,
     clean_neverhere:packCell(rec.pack.neverhere), clean_rubbish:packCell(rec.pack.rubbish),
     clean_food:packCell(rec.pack.food), clean_masking:packCell(rec.pack.masking), clean_wiped:packCell(rec.pack.wiped),
@@ -536,7 +536,7 @@ function effectiveJob(){return f.job==="__other__"?f.jobOther.trim():f.job;}
 function packAnswered(p){const v=f.pack[p.key];return v==="yes"||(v==="no"&&f.packNotes[p.key].trim());}
 // A flag is complete when it's off, or has a note, hours (if it takes them),
 // who (damage/variation), and the damage photo tick.
-function flagComplete(fl){const s=f.flags[fl.key];return !s.on||( !!s.note.trim() && (!fl.extra||num(s.hours)>0) && (!fl.who||!!(s.who||"").trim()) && (!fl.photo||s.photo===true) );}
+function flagComplete(fl){const s=f.flags[fl.key];return !s.on||( !!s.note.trim() && (!fl.extra||num(s.hours)>0) && (!fl.who||!!(s.who||"").trim()) );}
 
 /* ======================================================================
    TJP SAFETY CONTENT — single source of truth
@@ -719,8 +719,8 @@ let safetyDoc="jsa", safetyNoteSaving=false;
 let supUnlocked=false, supPinTry="", supPinErr="";
 try{ if(window.localStorage && localStorage.getItem("tjp_sup_unlocked")==="1") supUnlocked=true; }catch(e){}
 function blankForm(){
-  return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,
-    flags:{makegood:{on:false,note:"",hours:"",who:"",materials:"",photo:false},variation:{on:false,note:"",hours:"",who:"",materials:""},holdup:{on:false,note:"",hours:""},materials:{on:false,note:""}},
+  return {worker:null,job:"",jobOther:"",workDone:"",jobUpdate:"",prep:{},photos:false,photoUrls:[],
+    flags:{makegood:{on:false,note:"",hours:"",who:"",materials:"",photo:false,photoUrls:[]},variation:{on:false,note:"",hours:"",who:"",materials:"",photoUrls:[]},holdup:{on:false,note:"",hours:""},materials:{on:false,note:""}},
     pack:{neverhere:null,rubbish:null,food:null,masking:null,wiped:null,secure:null,tidy:null,dried:null},
     packNotes:{neverhere:"",rubbish:"",food:"",masking:"",wiped:"",secure:"",tidy:"",dried:""},
     notes:"",
@@ -881,8 +881,8 @@ function crewForm(){
   };
   ju.oninput=e=>{f.jobUpdate=e.target.value;juTick();updateProgress();updateSend();};
   fld.appendChild(ju);juTick();fld.appendChild(juHint);s.appendChild(fld);
-  const ph=el("button","tick"+(f.photos?" on":""),"<span class='box'></span>Photos taken of today's work <small style='color:#8A8F97'>(photos help the job update x10)</small>");
-  ph.onclick=()=>{f.photos=!f.photos;render();};s.appendChild(ph);
+  s.appendChild(eodPhotoStrip("day","Photos of today's work","Optional, but photos help the job update x10"));
+
   pad.appendChild(s);
 
   // Flag to Taylor
@@ -931,7 +931,7 @@ function flagBox(fl){
   const box=el("div","flag "+(state.on?"on":"off"));
   const head=el("button","flag-head");
   head.innerHTML="<span class='flag-q'><b>"+fl.q+"</b><span>"+fl.sub+"</span></span><span class='yn'><i class='n'>No</i><i class='y'>Yes</i></span>";
-  head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";if(fl.who){state.who="";state.materials="";}if(fl.photo)state.photo=false;}render();
+  head.onclick=()=>{state.on=!state.on;if(!state.on){state.note="";if(fl.extra)state.hours="";if(fl.who){state.who="";state.materials="";}state.photoUrls=[];}render();
     if(state.on)setTimeout(()=>{const t=document.querySelector('[data-focus="'+fl.key+'"]');if(t)t.focus();},40);};
   box.appendChild(head);
   const body=el("div","flag-body");
@@ -963,10 +963,10 @@ function flagBox(fl){
     mi.oninput=e=>{state.materials=e.target.value;};
     body.appendChild(mi);
   }
-  if(fl.photo){
-    const pt=el("button","tick"+(state.photo?" on":""),"<span class='box'></span>Photos taken of the damage <small style='color:#8A8F97'>(required — no photo, no charge)</small>");
-    pt.onclick=()=>{state.photo=!state.photo;render();};
-    body.appendChild(pt);
+  if(fl.key==="makegood") body.appendChild(eodPhotoStrip("makegood","Photos of the damage","Optional, but a photo is what makes it chargeable")); if(fl.key==="variation") body.appendChild(eodPhotoStrip("variation","Photos of the extra work","Optional, but a photo is what makes it chargeable")); {
+
+
+
   }
   box.appendChild(body);
   return box;
@@ -1022,7 +1022,7 @@ function submitBar(){
   else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.extra&&!(num(s.hours)>0);}))missing="Add the hours on your flagged extras";
   else if(FLAGS.some(fl=>f.flags[fl.key].on&&!f.flags[fl.key].note.trim()))missing="Add a note to your flagged items";
   else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.who&&!(s.who||"").trim();}))missing="Add who caused it or who asked — the docket needs a name";
-  else if(FLAGS.some(fl=>{const s=f.flags[fl.key];return s.on&&fl.photo&&s.photo!==true;}))missing="Take photos of the damage and tick the box — no photo, no charge";
+
   else if(PACK_ALL.some(p=>!f.pack[p.key]))missing="Answer every clean-up & gear question — Yes, No or N/A";
   else if(PACK_ALL.some(p=>{const v=f.pack[p.key];return(v==="no"||v==="na")&&!f.packNotes[p.key].trim();}))missing="Add a quick note on anything marked No or N/A";
   inner.appendChild(el("div","send-note",missing));
@@ -1035,10 +1035,10 @@ async function doSubmit(){
   const rec={date:todayISO(),ts:Date.now(),time:nowTime(),
     docket:"EOD-"+todayISO().replace(/-/g,"")+"-"+initials(f.worker),
     worker:f.worker,role:roleOf(f.worker),job:effectiveJob(),jobListed:f.job!=="__other__",
-    workDone:f.workDone.trim(),jobUpdate:f.jobUpdate.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:f.photos,
+    workDone:f.workDone.trim(),jobUpdate:f.jobUpdate.trim(),prep:Object.keys(f.prep).filter(k=>f.prep[k]),photos:((f.photoUrls||[]).length>0),photoUrls:(f.photoUrls||[]),
     flags:{},pack:{},paint:{checked:f.paint.checked},notes:f.notes.trim(),
     deepQuestion:isAppr()?ownersWayToday().q:"",deepAnswer:isAppr()?(f.appr.deepAnswer||"").trim():""};
-  FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0,who:fl.who?(s.who||"").trim():"",materials:fl.who?(s.materials||"").trim():"",photo:fl.photo?s.photo===true:false};});
+  FLAGS.forEach(fl=>{const s=f.flags[fl.key];rec.flags[fl.key]={on:s.on,note:s.note.trim(),hours:fl.extra?num(s.hours):0,who:fl.who?(s.who||"").trim():"",materials:fl.who?(s.materials||"").trim():"",photo:((s.photoUrls||[]).length>0),photoUrls:(s.photoUrls||[])};});
   PACK_ALL.forEach(p=>{rec.pack[p.key]={v:f.pack[p.key],note:(f.packNotes[p.key]||"").trim()};});
   try{await saveSubmission(rec);}catch(e){}
   if(isAppr()){ try{await saveAppr(rec);}catch(e){} }
@@ -1309,7 +1309,7 @@ function photoStrip(type,item,slot,label){
   return d;
 }
 
-function renderTouch(app){
+/* Photos on the daily sign-off: day, damage, variation. Uploads straight away like the touch-up photos do, but there is no Touchups row to hang them on, so the backend files them in the job folder and just hands back the URL, which rides along on the submission. On one line because the editors used to maintain this file mangle multi-line input. */ function eodBucket(b){ return b==="day" ? f : f.flags[b]; } async function eodPhotoPick(b){ const job=effectiveJob(); if(!job){ alert("Pick the job first, then add the photo."); return; } const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*"; inp.setAttribute("capture","environment"); inp.onchange=async()=>{ const file=inp.files&&inp.files[0]; if(!file)return; const key="eod|"+b; uploading[key]=true; render(); let ok=false; try{ const dataUrl=await fileToDataUrl(file,1280,0.72); const url=await tuPhoto(job,"eod",b,f.worker||"",dataUrl,"after"); if(url){ const t=eodBucket(b); if(!t.photoUrls)t.photoUrls=[]; t.photoUrls.push(url); ok=true; } }catch(e){} delete uploading[key]; render(); if(!ok)alert("Photo did not upload. Check signal and try again."); }; inp.click(); } function eodPhotoStrip(b,title,hint){ if(!PHOTOS_ENABLED) return el("span"); const t=eodBucket(b); const urls=(t&&t.photoUrls)||[]; const key="eod|"+b; const d=el("div","photostrip"); d.appendChild(el("div","plabel",title)); urls.forEach(u=>{ const th=el("img","photothumb"); th.src=u; th.alt=title; th.onclick=()=>{ lightbox=u; render(); }; d.appendChild(th); }); const busy=!!uploading[key]; const cam=el("button","cambtn",busy?"⏳ Uploading…":(urls.length?"📷 Add another":"📷 Add photo")); if(busy)cam.disabled=true; cam.onclick=()=>eodPhotoPick(b); d.appendChild(cam); if(hint){ const h=el("div","phint",hint); d.appendChild(h); } return d; } function renderTouch(app){
   const wrap=el("div","wrap");const pad=el("div","pad");
   // Job picker
   let s=sect("Which job?");
