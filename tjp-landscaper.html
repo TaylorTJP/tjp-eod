@@ -139,6 +139,13 @@
   .foot{padding:18px 16px 0;color:var(--ink-faint);font-size:12.5px;line-height:1.55}
   .count{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-faint);
          text-align:center;margin-top:9px}
+  .tweakbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+            padding:13px 14px;margin-top:12px}
+  .tweakbox b{display:block;font-size:14px;margin-bottom:3px}
+  .tweakbox p{margin:0 0 9px;font-size:13px;color:var(--ink-soft);line-height:1.5}
+  .tweakbox textarea{width:100%;padding:10px 12px;border:1px solid var(--line);
+    border-radius:9px;background:var(--paper);color:var(--ink);font:inherit;
+    font-size:15px;line-height:1.45;resize:vertical}
   .hide{display:none !important}
   :focus-visible{outline:2px solid var(--green);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
@@ -187,6 +194,8 @@
             <input type="color" id="hexPick" value="#9C9689" aria-label="Indicative colour">
             <input type="text" id="nameIn" placeholder="Material" aria-label="Material">
           </div>
+          <input type="text" id="whereIn" class="full hide" placeholder="Where does it go?" aria-label="Where it goes">
+          <p id="whereHint" class="full lede hide" style="padding:0;margin:0;font-size:12.5px"></p>
           <button type="button" id="addBtn" class="btn ghost full"
                   style="min-height:46px;font-size:16px">Add this area</button>
         </div>
@@ -227,6 +236,16 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
         <button type="button" id="save" class="btn ghost" style="min-height:46px;font-size:16px">Save image</button>
         <button type="button" id="again" class="btn ghost" style="min-height:46px;font-size:16px">Try something else</button>
+      </div>
+
+      <div class="tweakbox">
+        <b>Not quite right?</b>
+        <p>Tell us what to change and we'll run it again. Every go starts from
+        your original photo, so nothing stacks up.</p>
+        <textarea id="tweakIn" rows="2" maxlength="300"
+                  placeholder="eg make the driveway lighter, and swap the fence to timber paling"></textarea>
+        <button type="button" id="tweakGo" class="btn ghost"
+                style="min-height:46px;font-size:16px;margin-top:8px">Run it again</button>
       </div>
 
       <div class="send">
@@ -271,11 +290,31 @@ const BRAND = {
 
 // Areas. Ground and structure, not paint. Clients rename these all the time,
 // so the backend falls back to using whatever it's given verbatim.
+/* Two kinds of area, and the difference matters more than it looks.
+     "surface"   resurfacing what is already there. The ground keeps its
+                 existing levels and falls, only the finish changes.
+     "structure" something new that isn't in the photo yet: a retaining wall, a
+                 fence, a deck, steps. These are allowed to change the levels,
+                 cut into a bank and sit where nothing currently is, so the
+                 backend loosens the "keep the existing levels" rule for them.
+                 They also get a free text "where" box, because the model has no
+                 idea which bank the wall goes on unless it's told. */
 const AREAS = [
-  "Driveway", "Paths", "Patio / alfresco", "Pool surround", "Courtyard",
-  "Retaining wall", "Fencing", "Lawn", "Garden beds", "Decking", "Steps",
-  "Letterbox / pillar"
+  { n:"Driveway",           k:"surface" },
+  { n:"Paths",              k:"surface" },
+  { n:"Patio / alfresco",   k:"surface" },
+  { n:"Pool surround",      k:"surface" },
+  { n:"Courtyard",          k:"surface" },
+  { n:"Lawn",               k:"surface" },
+  { n:"Garden beds",        k:"surface" },
+  { n:"Retaining wall",     k:"structure", hint:"Where does it go, and how high? eg along the left boundary, about 900 high" },
+  { n:"Fencing",            k:"structure", hint:"Which boundary, and how high? eg front boundary, 1.8m, with a gate" },
+  { n:"Decking",            k:"structure", hint:"Where, and what size? eg off the back door, about 6m x 4m, one step down to the lawn" },
+  { n:"Steps",              k:"structure", hint:"Where, and how many? eg from the patio down to the lawn, three steps" },
+  { n:"Letterbox / pillar", k:"structure", hint:"Where does it sit? eg at the front gate, left of the driveway" }
 ];
+const areaKind = n => (AREAS.find(a => a.n === n) || {}).k || "surface";
+const areaHint = n => (AREAS.find(a => a.n === n) || {}).hint || "";
 
 /* The material book. This is the landscaping equivalent of the paint palette.
      g = group        n = name shown to the client
@@ -341,7 +380,8 @@ $("brandDocket").firstChild.nodeValue = BRAND.docket;
 $("dkt").textContent = new Date().toLocaleDateString("en-AU",
   { day:"2-digit", month:"short" }).toUpperCase();
 
-AREAS.forEach(a => $("areaSel").add(new Option(a, a)));
+AREAS.forEach(a => $("areaSel").add(new Option(a.n, a.n)));
+$("areaSel").onchange = showWhere;
 $("palSel").add(new Option("Pick a material…", ""));
 [...new Set(MATERIALS.map(c => c.g))].forEach(g => {
   const og = document.createElement("optgroup");
@@ -410,9 +450,11 @@ $("addBtn").onclick = () => {
   // as a bare name and the model works it out, same as a typed colour does on
   // the house app.
   const desc = (i !== "" && MATERIALS[+i] && MATERIALS[+i].n === name) ? MATERIALS[+i].d : "";
+  const kind = areaKind(area);
+  const where = kind === "structure" ? ($("whereIn").value || "").trim().slice(0, 160) : "";
   state.picks = state.picks.filter(p => p.area !== area);   // one material per area
-  state.picks.push({ area, name, hex, desc });
-  $("nameIn").value = ""; $("palSel").value = "";
+  state.picks.push({ area, name, hex, desc, kind, where });
+  $("nameIn").value = ""; $("palSel").value = ""; $("whereIn").value = "";
   clearErr(); drawRows(); refreshAreas(); sync();
 };
 
@@ -423,9 +465,20 @@ function refreshAreas(){
   const sel = $("areaSel");
   const keep = sel.value;
   sel.innerHTML = "";
-  AREAS.forEach(a => sel.appendChild(new Option((used.indexOf(a) > -1 ? "✓ " : "") + a, a)));
-  const next = AREAS.find(a => used.indexOf(a) === -1);
-  sel.value = next || keep;
+  AREAS.forEach(a => sel.appendChild(new Option((used.indexOf(a.n) > -1 ? "✓ " : "") + a.n, a.n)));
+  const next = AREAS.find(a => used.indexOf(a.n) === -1);
+  sel.value = next ? next.n : keep;
+  showWhere();
+}
+
+/* The "where" box only makes sense for a structure. A driveway is already in
+   the photo, a retaining wall isn't, so only the second one needs telling. */
+function showWhere(){
+  const structure = areaKind($("areaSel").value) === "structure";
+  $("whereIn").classList.toggle("hide", !structure);
+  $("whereHint").classList.toggle("hide", !structure);
+  $("whereHint").textContent = structure ? areaHint($("areaSel").value) : "";
+  if (!structure) $("whereIn").value = "";
 }
 
 function drawRows(){
@@ -440,7 +493,7 @@ function drawRows(){
     who.className = "who";
     who.innerHTML = "<b></b><span></span>";
     who.querySelector("b").textContent = p.area;
-    who.querySelector("span").textContent = p.name;
+    who.querySelector("span").textContent = p.where ? (p.name + " — " + p.where) : p.name;
     const x = document.createElement("button");
     x.className = "x"; x.type = "button"; x.textContent = "×";
     x.setAttribute("aria-label", "Remove " + p.area);
@@ -465,13 +518,21 @@ const MSGS = ["Sending your photo…", "Setting out the areas…",
               "Laying the materials…", "Matching the light and shadows…",
               "Almost there…"];
 
-$("go").onclick = render;
+$("go").onclick = () => render("");
+$("tweakGo").onclick = () => {
+  const t = ($("tweakIn").value || "").trim();
+  if (!t) return fail("Tell us what to change.", "A line or two is plenty.");
+  render(t);
+};
 $("again").onclick = () => {
   $("result").classList.add("hide");
   window.scrollTo({ top:0, behavior:"smooth" });
 };
 
-async function render(){
+/* tweak is the client's own words from the box under the result. It always
+   re-renders from the ORIGINAL photo, never from the last render, because
+   editing an edit compounds the errors instead of fixing them. */
+async function render(tweak){
   if (state.busy) return;
   if (API_URL.indexOf("PASTE_YOUR") === 0)
     return fail("Not connected yet.", "The visualiser backend hasn't been linked up.");
@@ -497,7 +558,7 @@ async function render(){
       headers:{ "Content-Type":"text/plain;charset=utf-8" },
       body: JSON.stringify({
         action:"render", session:state.session, pack:BRAND.pack,
-        photo:state.photo, areas:state.picks
+        photo:state.photo, areas:state.picks, tweak:(tweak || "").slice(0, 300)
       })
     });
     const d = await r.json();
@@ -512,6 +573,7 @@ async function render(){
       $("beforeImg").src = state.photo;
       $("afterImg").src  = d.image;
       $("result").classList.remove("hide");
+      $("tweakIn").value = "";
       setSplit(0.5);
       requestAnimationFrame(() =>
         $("result").scrollIntoView({ behavior:"smooth", block:"start" }));
