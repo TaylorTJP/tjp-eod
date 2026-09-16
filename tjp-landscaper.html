@@ -194,7 +194,7 @@
             <input type="color" id="hexPick" value="#9C9689" aria-label="Indicative colour">
             <input type="text" id="nameIn" placeholder="Material" aria-label="Material">
           </div>
-          <input type="text" id="whereIn" class="full hide" placeholder="Where does it go?" aria-label="Where it goes">
+          <input type="text" id="whereIn" class="full" placeholder="Where does it go?" aria-label="Where it goes">
           <p id="whereHint" class="full lede hide" style="padding:0;margin:0;font-size:12.5px"></p>
           <button type="button" id="addBtn" class="btn ghost full"
                   style="min-height:46px;font-size:16px">Add this area</button>
@@ -300,13 +300,13 @@ const BRAND = {
                  They also get a free text "where" box, because the model has no
                  idea which bank the wall goes on unless it's told. */
 const AREAS = [
-  { n:"Driveway",           k:"surface" },
-  { n:"Paths",              k:"surface" },
-  { n:"Patio / alfresco",   k:"surface" },
-  { n:"Pool surround",      k:"surface" },
-  { n:"Courtyard",          k:"surface" },
-  { n:"Lawn",               k:"surface" },
-  { n:"Garden beds",        k:"surface" },
+  { n:"Driveway",           k:"surface",   hint:"Doing all of it? If not, say where it stops. eg just up to the gate" },
+  { n:"Paths",              k:"surface",   hint:"Which path, and where does it run? eg down the left side to the back door" },
+  { n:"Patio / alfresco",   k:"surface",   hint:"Which area, and how big? eg the slab off the back door" },
+  { n:"Pool surround",      k:"surface",   hint:"How far out from the pool?" },
+  { n:"Courtyard",          k:"surface",   hint:"Which area? eg the enclosed bit by the side gate" },
+  { n:"Lawn",               k:"surface",   hint:"All of it, or just part? eg the flat area only, not the bank" },
+  { n:"Garden beds",        k:"surface",   hint:"Which beds? eg along the back fence only" },
   { n:"Retaining wall",     k:"structure", hint:"Where does it go, and how high? eg along the left boundary, about 900 high" },
   { n:"Fencing",            k:"structure", hint:"Which boundary, and how high? eg front boundary, 1.8m, with a gate" },
   { n:"Decking",            k:"structure", hint:"Where, and what size? eg off the back door, about 6m x 4m, one step down to the lawn" },
@@ -451,7 +451,7 @@ $("addBtn").onclick = () => {
   // the house app.
   const desc = (i !== "" && MATERIALS[+i] && MATERIALS[+i].n === name) ? MATERIALS[+i].d : "";
   const kind = areaKind(area);
-  const where = kind === "structure" ? ($("whereIn").value || "").trim().slice(0, 160) : "";
+  const where = ($("whereIn").value || "").trim().slice(0, 160);
   state.picks = state.picks.filter(p => p.area !== area);   // one material per area
   state.picks.push({ area, name, hex, desc, kind, where });
   $("nameIn").value = ""; $("palSel").value = ""; $("whereIn").value = "";
@@ -471,14 +471,16 @@ function refreshAreas(){
   showWhere();
 }
 
-/* The "where" box only makes sense for a structure. A driveway is already in
-   the photo, a retaining wall isn't, so only the second one needs telling. */
+/* The "where" box is optional on every area now, and it answers two different
+   questions depending on the kind. On a structure it's "where does this new
+   thing go", because the model can't guess which bank the wall sits on. On a
+   surface it's "how far does this go", because left to itself the model picks
+   its own boundary and runs the driveway across the whole slab. */
 function showWhere(){
   const structure = areaKind($("areaSel").value) === "structure";
-  $("whereIn").classList.toggle("hide", !structure);
-  $("whereHint").classList.toggle("hide", !structure);
-  $("whereHint").textContent = structure ? areaHint($("areaSel").value) : "";
-  if (!structure) $("whereIn").value = "";
+  $("whereIn").placeholder = structure ? "Where does it go?" : "How far does it go? (optional)";
+  $("whereHint").textContent = areaHint($("areaSel").value);
+  $("whereHint").classList.toggle("hide", !$("whereHint").textContent);
 }
 
 function drawRows(){
