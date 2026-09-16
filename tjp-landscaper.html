@@ -1,0 +1,605 @@
+<!-- LANDSCAPE VISUALISER  (tjp-landscaper.html)
+     Standalone page, single file, no build step. Forked from tjp-visualiser.html
+     (the TJP house painting version) and re-pointed at ground surfaces.
+
+     Client uploads a photo of their yard, picks a material per area, and the AI
+     shows it built. Before/after slider, same as the house one.
+
+     >>> TWO SWAP POINTS <<<
+       API_URL  - the /exec URL of the "TJP visualiser backend" Apps Script.
+                  The SAME backend serves both apps. This page sends
+                  pack:"landscaping" so the backend uses the landscaping prompt
+                  instead of the house painting one.
+       BRAND    - business name, tagline, accent. Change these four lines and the
+                  page belongs to a different business. This is the first piece
+                  of the multi-tenant framework: the trade is a config object,
+                  not a rebuild.
+
+     MATERIALS below is the landscaping equivalent of the paint colour book.
+     Each entry:  g=group  n=name  h=indicative swatch hex  d=what the model is
+     told to build. The d line is the one that decides whether the render looks
+     real, so tune there before touching anything else. -->
+<!doctype html>
+<html lang="en-AU">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>See it in your yard</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --paper:#ECEAE3; --card:#FFFFFF;
+    --ink:#1C1F22; --ink-soft:#5C616A; --ink-faint:#8A8F97;
+    --line:#DCD8CE; --line-soft:#ECE9E1;
+    --green:#1C7A4B; --green-soft:#E7F1EB; --green-line:#BFE0CC;
+    --amber:#B86C12; --amber-soft:#FAEEDB; --amber-line:#EBCB97;
+    --band:#22282E; --radius:11px; --tap:48px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+       font-family:'Inter',system-ui,-apple-system,sans-serif;
+       font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:560px;margin:0 auto;padding:0 0 90px}
+
+  /* header */
+  .band{background:var(--band);color:#fff;padding:18px 20px 16px}
+  .band-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .mark{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;
+        letter-spacing:.04em;line-height:1;text-transform:uppercase}
+  .mark small{display:block;font-size:11px;font-weight:600;letter-spacing:.22em;
+              color:#A9B0B8;margin-top:5px}
+  .docket{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A9B0B8;
+          text-align:right;line-height:1.6;white-space:nowrap}
+  .lede{padding:16px 20px 0;color:var(--ink-soft);font-size:15px}
+
+  .pad{padding:20px 16px 0}
+  .sect{margin-bottom:20px}
+  .h{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px;
+     letter-spacing:.03em;margin:0 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+
+  /* photo drop */
+  .drop{border:1.5px dashed var(--line);border-radius:var(--radius);background:var(--card);
+        padding:26px 18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+  .drop:hover,.drop.over{border-color:var(--green);background:var(--green-soft)}
+  .drop b{display:block;font-size:16px;margin-bottom:4px}
+  .drop span{color:var(--ink-faint);font-size:13px}
+  .shot{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line)}
+  .shot img{display:block;width:100%}
+  .shot button{position:absolute;top:8px;right:8px;border:0;border-radius:7px;
+               background:rgba(28,31,34,.82);color:#fff;font-size:13px;padding:7px 11px;cursor:pointer}
+
+  /* colour rows */
+  .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+  .row:last-of-type{border-bottom:0}
+  .sw{width:32px;height:32px;border-radius:7px;border:1px solid rgba(0,0,0,.16);flex:0 0 auto}
+  .row .who{flex:1;min-width:0}
+  .row .who b{display:block;font-size:15px;font-weight:600}
+  .row .who span{display:block;font-size:13px;color:var(--ink-faint);
+                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .x{border:0;background:transparent;color:var(--ink-faint);font-size:20px;
+     line-height:1;padding:6px 4px;cursor:pointer}
+  .x:hover{color:var(--ink)}
+
+  select,input[type=text]{width:100%;min-height:var(--tap);padding:10px 12px;
+    border:1px solid var(--line);border-radius:9px;background:var(--card);
+    color:var(--ink);font:inherit;font-size:15px}
+  input[type=color]{width:52px;height:var(--tap);padding:2px;border:1px solid var(--line);
+    border-radius:9px;background:var(--card);cursor:pointer}
+  .add{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .add .full{grid-column:1 / -1}
+  .add-row{display:flex;gap:8px;align-items:center}
+
+  button.btn{width:100%;min-height:54px;border:0;border-radius:10px;background:var(--band);
+    color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:19px;
+    letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+  button.btn:disabled{background:#B9BDC2;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+
+  /* the reveal — the one place this page gets loud */
+  .reveal{position:relative;border-radius:var(--radius);overflow:hidden;
+          border:1px solid var(--line);background:#000;touch-action:none;user-select:none}
+  .reveal img{display:block;width:100%;pointer-events:none}
+  /* The "after" sits exactly on top of the "before" and is revealed with
+     clip-path. Cropping by container width (the obvious approach) squashes the
+     image, because the inner img then inherits the shrunken width. */
+  .reveal .after{position:absolute;inset:0}
+  .reveal .after img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;
+          box-shadow:0 0 0 1px rgba(0,0,0,.35);cursor:ew-resize}
+  .handle::after{content:'';position:absolute;top:50%;left:50%;width:38px;height:38px;
+    margin:-19px 0 0 -19px;border-radius:50%;background:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .handle::before{content:'‹ ›';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:2;font-size:17px;color:var(--band);letter-spacing:2px}
+  .tags{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+        font-size:11px;color:var(--ink-faint);padding:7px 2px 0}
+
+  /* states */
+  .working{text-align:center;padding:30px 18px;background:var(--card);
+           border:1px solid var(--line);border-radius:var(--radius)}
+  .bar{height:6px;background:var(--line-soft);border-radius:4px;overflow:hidden;margin:14px 0 10px}
+  .bar i{display:block;height:100%;width:0;background:var(--green);border-radius:4px;
+         transition:width .5s linear}
+  .working p{margin:0;color:var(--ink-soft);font-size:14px}
+  .err{background:var(--amber-soft);border:1px solid var(--amber-line);border-radius:var(--radius);
+       padding:13px 14px;font-size:14px;color:#6E4208}
+  .err b{display:block;margin-bottom:3px}
+
+  /* the disclaimer — permanent, not dismissable */
+  .note{background:var(--amber-soft);border:1px solid var(--amber-line);
+        border-radius:var(--radius);padding:13px 14px;font-size:13.5px;line-height:1.5;color:#6E4208}
+  .note b{display:block;margin-bottom:3px;font-size:14px}
+  .send{background:var(--green-soft);border:1px solid var(--green-line);
+        border-radius:var(--radius);padding:13px 14px;font-size:13.5px;
+        line-height:1.5;color:#125634;margin-top:12px}
+  .send b{display:block;margin-bottom:3px;font-size:14px}
+  .foot{padding:18px 16px 0;color:var(--ink-faint);font-size:12.5px;line-height:1.55}
+  .count{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-faint);
+         text-align:center;margin-top:9px}
+  .hide{display:none !important}
+  :focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+
+<div class="wrap">
+
+  <div class="band">
+    <div class="band-top">
+      <div class="mark" id="brandMark">—<small id="brandSub">Landscape visualiser</small></div>
+      <div class="docket" id="brandDocket">—<br><b id="dkt">—</b></div>
+    </div>
+  </div>
+
+  <p class="lede">Upload a photo of your yard and we'll show you roughly how it
+  looks once it's built.</p>
+
+  <div class="pad">
+
+    <!-- 1. photo -->
+    <div class="sect">
+      <h2 class="h">Your photo</h2>
+      <div id="dropZone" class="drop" tabindex="0" role="button">
+        <b>Add a photo</b>
+        <span>Stand back, daylight, the whole area in frame</span>
+      </div>
+      <div id="shot" class="shot hide">
+        <img id="shotImg" alt="Your yard">
+        <button type="button" id="reshoot">Change</button>
+      </div>
+      <input type="file" id="file" accept="image/*" class="hide">
+    </div>
+
+    <!-- 2. materials -->
+    <div class="sect">
+      <h2 class="h">What's going where</h2>
+      <div class="card">
+        <div id="rows"></div>
+        <p id="empty" class="lede" style="padding:4px 0;font-size:14px">
+          Nothing chosen yet. Add an area below.</p>
+
+        <div class="add">
+          <select id="areaSel" class="full" aria-label="Area"></select>
+          <select id="palSel" class="full" aria-label="Material"></select>
+          <div class="add-row">
+            <input type="color" id="hexPick" value="#9C9689" aria-label="Indicative colour">
+            <input type="text" id="nameIn" placeholder="Material" aria-label="Material">
+          </div>
+          <button type="button" id="addBtn" class="btn ghost full"
+                  style="min-height:46px;font-size:16px">Add this area</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. go -->
+    <div class="sect">
+      <button type="button" id="go" class="btn" disabled>Show me</button>
+      <p id="count" class="count"></p>
+    </div>
+
+    <!-- working -->
+    <div id="working" class="sect hide">
+      <div class="working">
+        <div class="bar"><i id="barFill"></i></div>
+        <p id="workMsg">Sending your photo…</p>
+      </div>
+    </div>
+
+    <!-- error -->
+    <div id="errBox" class="sect hide"><div class="err">
+      <b id="errTitle">That didn't work</b>
+      <span id="errMsg"></span>
+    </div></div>
+
+    <!-- result -->
+    <div id="result" class="sect hide">
+      <h2 class="h">Before and after</h2>
+      <div id="reveal" class="reveal">
+        <img id="beforeImg" alt="Your yard before">
+        <div class="after"><img id="afterImg" alt="Your yard built"></div>
+        <div class="handle" id="handle" tabindex="0" role="slider"
+             aria-label="Slide to compare before and after"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
+      </div>
+      <div class="tags"><span>NOW</span><span>BUILT</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <button type="button" id="save" class="btn ghost" style="min-height:46px;font-size:16px">Save image</button>
+        <button type="button" id="again" class="btn ghost" style="min-height:46px;font-size:16px">Try something else</button>
+      </div>
+
+      <div class="send">
+        <b>Send it through</b>
+        This render stops here, it doesn't go anywhere on its own. If you want it
+        looked at, save or screenshot it and send it through with the materials
+        you've landed on.
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="note">
+        <b>Indicative only</b>
+        This is a computer-generated impression, not a design and not a quote.
+        Levels, falls, drainage, edging and what the ground will actually take
+        are all decided on site. Materials vary batch to batch, so confirm the
+        real thing from a sample or a display before anything is ordered.
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    Your photo is sent to Google's Gemini service to produce the image, and a
+    copy is kept so the result can be checked. It isn't published anywhere or
+    used for anything else.
+  </p>
+</div>
+
+<script>
+/* ====================== CONFIG ====================== */
+
+// >>> BACKEND SWAP POINT <<<  same Apps Script as the house visualiser.
+const API_URL = "https://script.google.com/macros/s/AKfycbyG0Uj9MKKmEdNdPQEEu8V_ktuAn0fhzOWlvx2fbKjANtCk7bz3PFPSf98Eb00uMebsOg/exec";
+
+// >>> TENANT SWAP POINT <<<  four lines and this page is a different business.
+const BRAND = {
+  name:    "TJP",                      // big mark, top left
+  sub:     "Landscape visualiser",     // small line under it
+  docket:  "DEMO BUILD",               // right hand stamp, keep it short
+  pack:    "landscaping"               // tells the backend which prompt to use
+};
+
+// Areas. Ground and structure, not paint. Clients rename these all the time,
+// so the backend falls back to using whatever it's given verbatim.
+const AREAS = [
+  "Driveway", "Paths", "Patio / alfresco", "Pool surround", "Courtyard",
+  "Retaining wall", "Fencing", "Lawn", "Garden beds", "Decking", "Steps",
+  "Letterbox / pillar"
+];
+
+/* The material book. This is the landscaping equivalent of the paint palette.
+     g = group        n = name shown to the client
+     h = indicative swatch hex (on-screen only, never colour true)
+     d = what the model is told to build. Texture and scale live here, and this
+         is the field to tune when a render comes back looking fake. */
+const MATERIALS = [
+  {g:"Concrete", n:"Exposed aggregate, charcoal", h:"#5B5C5E", d:"exposed aggregate concrete in a charcoal grey mix, small rounded stone showing evenly across the surface, matt finish, saw cut control joints"},
+  {g:"Concrete", n:"Exposed aggregate, sandstone", h:"#C2B294", d:"exposed aggregate concrete in a warm sandstone mix, small rounded stone showing evenly, matt finish, saw cut control joints"},
+  {g:"Concrete", n:"Plain concrete, natural grey", h:"#B4B3AE", d:"plain broom finished concrete in natural grey, fine even broom texture, saw cut control joints"},
+  {g:"Concrete", n:"Honed concrete, charcoal", h:"#6A6B6D", d:"honed polished concrete in charcoal, smooth low sheen surface with fine aggregate just showing, crisp joints"},
+  {g:"Concrete", n:"Stencil concrete, brick pattern", h:"#A9866B", d:"stencilled concrete in a running bond brick pattern, terracotta tone with grey joint lines, flat surface"},
+  {g:"Concrete", n:"Coloured concrete, slate grey", h:"#797B7C", d:"oxide coloured concrete in slate grey with a light broom finish"},
+
+  {g:"Pavers", n:"Concrete paver, charcoal", h:"#55575A", d:"rectangular concrete pavers in charcoal, laid in a stretcher bond with tight even joints, matt finish"},
+  {g:"Pavers", n:"Concrete paver, sandstone", h:"#CFC1A4", d:"rectangular concrete pavers in a sandstone tone, stretcher bond, tight even joints"},
+  {g:"Pavers", n:"Clay paver, red", h:"#9A4B33", d:"clay pavers in traditional red, herringbone pattern, sand filled joints"},
+  {g:"Pavers", n:"Bluestone", h:"#4E5358", d:"sawn bluestone pavers in large format, dark blue grey, fine sawn surface, narrow grouted joints"},
+  {g:"Pavers", n:"Travertine", h:"#D8CBB2", d:"French pattern travertine pavers, cream and beige tones with natural pitting, matt honed surface"},
+  {g:"Pavers", n:"Granite cobble", h:"#7C7B78", d:"granite cobblestone setts laid in fan pattern with sand filled joints"},
+
+  {g:"Lawn & soft", n:"Natural turf", h:"#4E7A3C", d:"healthy natural lawn turf, even green, mown in neat stripes, clean edges against the hard surfaces"},
+  {g:"Lawn & soft", n:"Artificial turf", h:"#5C8A46", d:"artificial turf, even green pile with a slight sheen, perfectly flat, crisp straight edges"},
+  {g:"Lawn & soft", n:"Pine bark mulch", h:"#6A4A31", d:"pine bark mulch spread evenly across the garden beds, medium chip, dark brown"},
+  {g:"Lawn & soft", n:"Hardwood chip mulch", h:"#7C6244", d:"hardwood chip mulch spread evenly, mid brown, coarse texture"},
+  {g:"Lawn & soft", n:"River pebble", h:"#A9A296", d:"smooth river pebble 20 to 40mm spread evenly, mixed grey and tan tones"},
+  {g:"Lawn & soft", n:"Decorative gravel, white", h:"#D5D2C8", d:"white decorative gravel topping spread evenly and raked flat"},
+  {g:"Lawn & soft", n:"Deco granite topping", h:"#B09372", d:"compacted decomposed granite topping in a warm tan, smooth raked surface"},
+
+  {g:"Walls", n:"Sandstone block", h:"#CDB88E", d:"sandstone block retaining wall, coursed rectangular blocks with visible mortar joints, natural sawn face"},
+  {g:"Walls", n:"Besser, rendered charcoal", h:"#55575A", d:"rendered blockwork retaining wall finished in charcoal, flat even render, square capping"},
+  {g:"Walls", n:"Concrete sleeper, charcoal", h:"#6E6F70", d:"charcoal concrete sleeper retaining wall between galvanised steel posts, horizontal sleepers with visible joints"},
+  {g:"Walls", n:"Timber sleeper", h:"#7A5C3C", d:"treated timber sleeper retaining wall, horizontal sleepers, natural timber tone"},
+  {g:"Walls", n:"Stacked stone", h:"#8B8479", d:"dry stacked stone retaining wall, irregular coursed natural stone in grey and tan"},
+
+  {g:"Fencing", n:"Aluminium slat, monument", h:"#3A3B3C", d:"horizontal aluminium slat fence in monument dark grey, even gaps between slats, square posts"},
+  {g:"Fencing", n:"Hardwood paling", h:"#8A6A46", d:"vertical hardwood paling fence, natural timber tone, capped top rail"},
+  {g:"Fencing", n:"Colorbond, monument", h:"#323233", d:"Colorbond steel fence in Monument, vertical profile sheets with capping"},
+  {g:"Fencing", n:"Frameless glass (pool)", h:"#BFD3D6", d:"frameless glass pool fence, clear toughened glass panels on stainless spigots"},
+  {g:"Fencing", n:"Tubular steel (pool)", h:"#3C3D3E", d:"black tubular steel pool fence, evenly spaced vertical bars"},
+
+  {g:"Decking", n:"Merbau decking", h:"#8A4B2A", d:"merbau hardwood decking, oiled rich red brown, straight boards with even gaps"},
+  {g:"Decking", n:"Blackbutt decking", h:"#C2A077", d:"blackbutt hardwood decking, clear oiled pale honey tone, straight boards with even gaps"},
+  {g:"Decking", n:"Composite, charcoal", h:"#4C4E4F", d:"composite decking boards in charcoal, fine woodgrain texture, straight boards with even gaps"},
+  {g:"Decking", n:"Composite, teak", h:"#95714A", d:"composite decking boards in a teak tone, fine woodgrain texture, even gaps"}
+];
+
+const MAX_RENDERS = 8;      // matches MAX_PER_SESSION in the backend
+const MAX_EDGE    = 1280;   // downscale before upload
+
+/* ====================== STATE ====================== */
+
+const state = { photo:null, picks:[], renders:0, busy:false,
+                session: Math.random().toString(36).slice(2, 10) };
+
+const $ = id => document.getElementById(id);
+
+/* ====================== SETUP ====================== */
+
+$("brandMark").firstChild.nodeValue = BRAND.name;
+$("brandSub").textContent = BRAND.sub;
+$("brandDocket").firstChild.nodeValue = BRAND.docket;
+$("dkt").textContent = new Date().toLocaleDateString("en-AU",
+  { day:"2-digit", month:"short" }).toUpperCase();
+
+AREAS.forEach(a => $("areaSel").add(new Option(a, a)));
+$("palSel").add(new Option("Pick a material…", ""));
+[...new Set(MATERIALS.map(c => c.g))].forEach(g => {
+  const og = document.createElement("optgroup");
+  og.label = g;
+  MATERIALS.forEach((c, i) => {
+    if (c.g !== g) return;
+    og.appendChild(new Option(c.n, String(i)));
+  });
+  $("palSel").appendChild(og);
+});
+
+/* ---- photo ---- */
+$("dropZone").onclick = () => $("file").click();
+$("dropZone").onkeydown = e => { if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click();} };
+$("reshoot").onclick = () => $("file").click();
+$("file").onchange = () => { if($("file").files[0]) loadPhoto($("file").files[0]); };
+
+["dragenter","dragover"].forEach(ev =>
+  $("dropZone").addEventListener(ev, e => { e.preventDefault(); $("dropZone").classList.add("over"); }));
+["dragleave","drop"].forEach(ev =>
+  $("dropZone").addEventListener(ev, e => { e.preventDefault(); $("dropZone").classList.remove("over"); }));
+$("dropZone").addEventListener("drop", e => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) loadPhoto(f);
+});
+
+// Downscale + compress so uploads stay small — same approach as the EOD app.
+function loadPhoto(file){
+  if (!/^image\//.test(file.type)) return fail("That file isn't an image.", "Pick a JPG or PNG photo.");
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const s = Math.min(1, MAX_EDGE / Math.max(w, h));
+    w = Math.round(w * s); h = Math.round(h * s);
+    const cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    cv.getContext("2d").drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    state.photo = cv.toDataURL("image/jpeg", 0.85);
+    $("shotImg").src = state.photo;
+    $("shot").classList.remove("hide");
+    $("dropZone").classList.add("hide");
+    clearErr(); sync();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); fail("Couldn't read that photo.", "Try a different one."); };
+  img.src = url;
+}
+
+/* ---- materials ---- */
+$("palSel").onchange = () => {
+  const i = $("palSel").value;
+  if (i === "") return;
+  const c = MATERIALS[+i];
+  $("hexPick").value = c.h;
+  $("nameIn").value  = c.n;
+};
+
+$("addBtn").onclick = () => {
+  const area = $("areaSel").value;
+  const hex  = $("hexPick").value;
+  const name = ($("nameIn").value || "").trim();
+  if (!name) return fail("This area needs a material.",
+    "Pick one from the list, or type what's going down so we get it right.");
+  const i = $("palSel").value;
+  // desc only rides along when it came from the book. A typed material goes up
+  // as a bare name and the model works it out, same as a typed colour does on
+  // the house app.
+  const desc = (i !== "" && MATERIALS[+i] && MATERIALS[+i].n === name) ? MATERIALS[+i].d : "";
+  state.picks = state.picks.filter(p => p.area !== area);   // one material per area
+  state.picks.push({ area, name, hex, desc });
+  $("nameIn").value = ""; $("palSel").value = "";
+  clearErr(); drawRows(); refreshAreas(); sync();
+};
+
+/* Ticks off the areas already chosen and moves the dropdown to the next one
+   that isn't, so a second "add" doesn't quietly replace the first pick. */
+function refreshAreas(){
+  const used = state.picks.map(p => p.area);
+  const sel = $("areaSel");
+  const keep = sel.value;
+  sel.innerHTML = "";
+  AREAS.forEach(a => sel.appendChild(new Option((used.indexOf(a) > -1 ? "✓ " : "") + a, a)));
+  const next = AREAS.find(a => used.indexOf(a) === -1);
+  sel.value = next || keep;
+}
+
+function drawRows(){
+  const box = $("rows");
+  box.innerHTML = "";
+  state.picks.forEach((p, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const sw = document.createElement("div");
+    sw.className = "sw"; sw.style.background = p.hex;
+    const who = document.createElement("div");
+    who.className = "who";
+    who.innerHTML = "<b></b><span></span>";
+    who.querySelector("b").textContent = p.area;
+    who.querySelector("span").textContent = p.name;
+    const x = document.createElement("button");
+    x.className = "x"; x.type = "button"; x.textContent = "×";
+    x.setAttribute("aria-label", "Remove " + p.area);
+    x.onclick = () => { state.picks.splice(i,1); drawRows(); refreshAreas(); sync(); };
+    row.append(sw, who, x);
+    box.appendChild(row);
+  });
+  $("empty").classList.toggle("hide", state.picks.length > 0);
+}
+
+function sync(){
+  const left = MAX_RENDERS - state.renders;
+  $("go").disabled = state.busy || !state.photo || !state.picks.length || left <= 0;
+  $("count").textContent = state.renders
+    ? (left > 0 ? left + " more to go" : "That's the limit for now — give us a call and we'll run more")
+    : "";
+}
+
+/* ====================== RENDER ====================== */
+
+const MSGS = ["Sending your photo…", "Setting out the areas…",
+              "Laying the materials…", "Matching the light and shadows…",
+              "Almost there…"];
+
+$("go").onclick = render;
+$("again").onclick = () => {
+  $("result").classList.add("hide");
+  window.scrollTo({ top:0, behavior:"smooth" });
+};
+
+async function render(){
+  if (state.busy) return;
+  if (API_URL.indexOf("PASTE_YOUR") === 0)
+    return fail("Not connected yet.", "The visualiser backend hasn't been linked up.");
+
+  state.busy = true; clearErr();
+  $("result").classList.add("hide");
+  $("working").classList.remove("hide");
+  sync();
+
+  let step = 0;
+  $("workMsg").textContent = MSGS[0];
+  $("barFill").style.width = "6%";
+  const tick = setInterval(() => {
+    step = Math.min(step + 1, MSGS.length - 1);
+    $("workMsg").textContent = MSGS[step];
+    $("barFill").style.width = (10 + step * 20) + "%";
+  }, 3500);
+
+  try {
+    // text/plain dodges the CORS preflight Apps Script can't answer.
+    const r = await fetch(API_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action:"render", session:state.session, pack:BRAND.pack,
+        photo:state.photo, areas:state.picks
+      })
+    });
+    const d = await r.json();
+
+    clearInterval(tick);
+    $("barFill").style.width = "100%";
+
+    if (!d.ok || !d.image) {
+      showFail(d.error || "The image didn't come back.", d.detail);
+    } else {
+      state.renders++;
+      $("beforeImg").src = state.photo;
+      $("afterImg").src  = d.image;
+      $("result").classList.remove("hide");
+      setSplit(0.5);
+      requestAnimationFrame(() =>
+        $("result").scrollIntoView({ behavior:"smooth", block:"start" }));
+    }
+  } catch (err) {
+    clearInterval(tick);
+    showFail("Couldn't reach the visualiser.", "Check your signal and try again.");
+  }
+
+  $("working").classList.add("hide");
+  $("barFill").style.width = "0";
+  state.busy = false;
+  sync();
+}
+
+function showFail(msg, detail){
+  fail("That didn't work", detail ? msg + " " + detail : msg);
+}
+function fail(title, msg){
+  $("errTitle").textContent = title;
+  $("errMsg").textContent = msg || "";
+  $("errBox").classList.remove("hide");
+}
+function clearErr(){ $("errBox").classList.add("hide"); }
+
+/* ---- before/after slider ---- */
+const reveal = $("reveal"), after = reveal.querySelector(".after");
+let split = 0.5;
+
+function setSplit(f){
+  split = Math.max(0, Math.min(1, f));
+  const pct = split * 100;
+  after.style.clipPath = "inset(0 0 0 " + pct + "%)";
+  $("handle").style.left = pct + "%";
+  $("handle").setAttribute("aria-valuenow", Math.round(pct));
+}
+
+$("handle").addEventListener("keydown", e => {
+  const step = e.shiftKey ? 0.1 : 0.02;
+  if (e.key === "ArrowLeft")  { setSplit(split - step); e.preventDefault(); }
+  if (e.key === "ArrowRight") { setSplit(split + step); e.preventDefault(); }
+  if (e.key === "Home")       { setSplit(0); e.preventDefault(); }
+  if (e.key === "End")        { setSplit(1); e.preventDefault(); }
+});
+function fromEvent(e){
+  const r = reveal.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  setSplit(x / r.width);
+}
+let dragging = false;
+["mousedown","touchstart"].forEach(ev =>
+  reveal.addEventListener(ev, e => { dragging = true; fromEvent(e); }, {passive:true}));
+["mousemove","touchmove"].forEach(ev =>
+  window.addEventListener(ev, e => { if (dragging) fromEvent(e); }, {passive:true}));
+["mouseup","touchend"].forEach(ev =>
+  window.addEventListener(ev, () => { dragging = false; }));
+
+/* ---- save ---- */
+$("save").onclick = () => {
+  const a = document.createElement("a");
+  a.href = $("afterImg").src;
+  a.download = "landscape-visualiser-" + Date.now() + ".png";
+  a.click();
+};
+
+/* ====================== LINK CONTRACT ======================
+   Same shape as the house visualiser, so a quoting or selection app can deep
+   link straight in with the client's picks:
+
+     tjp-landscaper.html?c=Driveway~Exposed aggregate, charcoal~5B5C5E
+
+   Each pick is  area~name~hex(no #),  picks joined with "|", the whole value
+   URL-encoded. Unknown areas are accepted verbatim.
+   ========================================================== */
+(function readLink(){
+  const raw = new URLSearchParams(location.search).get("c");
+  if (!raw) { drawRows(); refreshAreas(); sync(); return; }
+  raw.split("|").forEach(chunk => {
+    const [area, name, hex] = chunk.split("~");
+    if (!area || !name) return;
+    const known = MATERIALS.find(m => m.n === name);
+    state.picks = state.picks.filter(p => p.area !== area);
+    state.picks.push({
+      area, name,
+      hex: hex ? "#" + hex.replace("#","") : (known ? known.h : "#9C9689"),
+      desc: known ? known.d : ""
+    });
+  });
+  drawRows(); refreshAreas(); sync();
+})();
+</script>
